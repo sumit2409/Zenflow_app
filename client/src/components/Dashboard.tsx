@@ -27,6 +27,7 @@ import {
 import { type ProfileMeta } from '../utils/profile'
 import { apiUrl } from '../utils/api'
 import OnboardingChecklist from './OnboardingChecklist'
+import { getPlannerEntries } from '../utils/planner'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
 
@@ -81,7 +82,7 @@ const chartOptions = {
   responsive: true,
   plugins: {
     legend: {
-      display: false,
+      display: true,
     },
   },
   scales: {
@@ -90,6 +91,8 @@ const chartOptions = {
       grid: { color: 'rgba(79, 58, 41, 0.08)' },
     },
     y: {
+      min: 0,
+      max: 100,
       ticks: { color: '#7d6a58' },
       grid: { color: 'rgba(79, 58, 41, 0.08)' },
     },
@@ -185,23 +188,65 @@ export default function Dashboard({ onSelect, user, token }: Props) {
     }
   }
 
-  const buildData = (type: string, color: string) => {
-    const filtered = logs.filter(entry => entry.type === type).sort((a, b) => a.date.localeCompare(b.date))
+  const progressChartData = useMemo(() => {
+    const days = Array.from({ length: 14 }, (_, index) => {
+      const date = new Date()
+      date.setHours(0, 0, 0, 0)
+      date.setDate(date.getDate() - (13 - index))
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    })
+
+    const actualTrend = days.map((dateKey) => {
+      const totals = logs
+        .filter((entry) => entry.date === dateKey)
+        .reduce(
+          (acc, entry) => {
+            const normalizedType = entry.type.startsWith('sudoku') ? 'sudoku' : entry.type
+            acc[normalizedType] = (acc[normalizedType] || 0) + Number(entry.value || 0)
+            return acc
+          },
+          { pomodoro: 0, meditation: 0, sudoku: 0, memory: 0, reaction: 0 } as Record<string, number>
+        )
+
+      const plannerEntries = getPlannerEntries(dateKey, meta.planner)
+      const requiredEntries = plannerEntries.filter((entry) => entry.required)
+      const requiredCompleted = requiredEntries.filter((entry) => entry.completed).length
+
+      const score =
+        Math.min(totals.pomodoro, 25) +
+        Math.min(totals.meditation, 5) * 4 +
+        Math.min(totals.sudoku, 1) * 15 +
+        Math.min(totals.memory + totals.reaction, 1) * 10 +
+        (requiredEntries.length === 0 ? 0 : (requiredCompleted / requiredEntries.length) * 30)
+
+      return Math.round(Math.min(100, score))
+    })
+
     return {
-      labels: filtered.map(entry => entry.date.slice(5)),
+      labels: days.map((dateKey) => dateKey.slice(5)),
       datasets: [
         {
-          label: type,
-          data: filtered.map(entry => entry.value),
-          borderColor: color,
-          backgroundColor: color,
+          label: 'Actual progress',
+          data: actualTrend,
+          borderColor: '#bc6c47',
+          backgroundColor: '#bc6c47',
+          borderWidth: 3,
+          pointRadius: 3,
+          tension: 0.34,
+        },
+        {
+          label: 'Ideal trend',
+          data: days.map(() => 100),
+          borderColor: '#6b8f71',
+          backgroundColor: '#6b8f71',
+          borderDash: [8, 6],
           borderWidth: 2,
-          pointRadius: 2,
-          tension: 0.38,
+          pointRadius: 0,
+          tension: 0,
         },
       ],
     }
-  }
+  }, [logs, meta.planner])
 
   return (
     <div className="dashboard sanctuary-shell">
@@ -400,23 +445,12 @@ export default function Dashboard({ onSelect, user, token }: Props) {
               <div className="skeleton-line" />
               <span>Loading your sanctuary history...</span>
             </div>
-          ) : user && logs.length > 0 ? (
+          ) : user ? (
             <div className="history-charts">
               <div className="chart-block">
-                <div className="chart-label">Focus</div>
-                <Line options={chartOptions} data={buildData('pomodoro', '#bc6c47')} />
-              </div>
-              <div className="chart-block">
-                <div className="chart-label">Meditation</div>
-                <Line options={chartOptions} data={buildData('meditation', '#6b8f71')} />
-              </div>
-              <div className="chart-block">
-                <div className="chart-label">Sudoku</div>
-                <Line options={chartOptions} data={buildData('sudoku', '#8b6f9b')} />
-              </div>
-              <div className="chart-block">
-                <div className="chart-label">Brain Arcade</div>
-                <Line options={chartOptions} data={buildData('memory', '#d4a373')} />
+                <div className="chart-label">Unified progress</div>
+                <Line options={chartOptions} data={progressChartData} />
+                <p className="muted chart-note">The ideal line assumes you hit your focus block, meditation, one puzzle or game, and all three daily routine tasks each day.</p>
               </div>
             </div>
           ) : (

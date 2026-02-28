@@ -2,12 +2,14 @@ import { Capacitor } from '@capacitor/core'
 import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/local-notifications'
 
 export type RequiredPlannerTaskKey = 'water' | 'exercise' | 'meditation'
+export type PlannerRepeat = 'once' | 'daily'
 
 export type PlannerCustomItem = {
   id: string
   title: string
   date: string
   time: string
+  repeat?: PlannerRepeat
 }
 
 export type PlannerMeta = {
@@ -24,6 +26,7 @@ export type PlannerEntry = {
   time: string
   required: boolean
   completed: boolean
+  repeat: PlannerRepeat
 }
 
 export const defaultReminderTimes: Record<RequiredPlannerTaskKey, string> = {
@@ -52,6 +55,17 @@ const requiredReminderSteps: Record<RequiredPlannerTaskKey, number[]> = {
 
 function createDateTime(dateKey: string, time: string) {
   return new Date(`${dateKey}T${time}:00`)
+}
+
+export function parsePlannerDate(dateKey: string) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(year, (month || 1) - 1, day || 1)
+}
+
+export function shiftPlannerDate(dateKey: string, offsetDays: number) {
+  const nextDate = parsePlannerDate(dateKey)
+  nextDate.setDate(nextDate.getDate() + offsetDays)
+  return `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`
 }
 
 function plannerNotificationId(input: string) {
@@ -90,7 +104,7 @@ export function getRequiredReminderLabel(taskKey: RequiredPlannerTaskKey) {
 export function getPlannerEntries(dateKey: string, planner: PlannerMeta | undefined): PlannerEntry[] {
   const reminderTimes = getReminderTimes(planner)
   const completions = planner?.completions?.[dateKey] || {}
-  const customItems = (planner?.customItems || []).filter((item) => item.date === dateKey)
+  const customItems = (planner?.customItems || []).filter((item) => item.repeat === 'daily' ? item.date <= dateKey : item.date === dateKey)
 
   const requiredEntries = requiredTaskDefinitions.map((task) => ({
     id: `required-${task.key}`,
@@ -99,6 +113,7 @@ export function getPlannerEntries(dateKey: string, planner: PlannerMeta | undefi
     time: reminderTimes[task.key],
     required: true,
     completed: Boolean(completions[`required-${task.key}`]),
+    repeat: 'daily' as PlannerRepeat,
   }))
 
   const customEntries = customItems.map((item) => ({
@@ -108,6 +123,7 @@ export function getPlannerEntries(dateKey: string, planner: PlannerMeta | undefi
     time: item.time,
     required: false,
     completed: Boolean(completions[item.id]),
+    repeat: item.repeat || 'once',
   }))
 
   return [...requiredEntries, ...customEntries].sort((left, right) => left.time.localeCompare(right.time))
@@ -135,7 +151,7 @@ export function addPlannerItem(planner: PlannerMeta | undefined, item: PlannerCu
   return {
     ...(planner || {}),
     reminderTimes: getReminderTimes(planner),
-    customItems: [...(planner?.customItems || []), item].sort((left, right) => `${left.date}-${left.time}`.localeCompare(`${right.date}-${right.time}`)),
+    customItems: [...(planner?.customItems || []), { ...item, repeat: item.repeat || 'once' }].sort((left, right) => `${left.date}-${left.time}`.localeCompare(`${right.date}-${right.time}`)),
     completions: { ...(planner?.completions || {}) },
     remindersEnabled: planner?.remindersEnabled ?? true,
   }
@@ -263,8 +279,9 @@ export async function schedulePlannerNotifications(planner: PlannerMeta | undefi
     })
 
     customItems
-      .filter((item) => item.date === dateKey && !dayCompletions[item.id])
+      .filter((item) => (item.repeat === 'daily' ? item.date <= dateKey : item.date === dateKey) && !dayCompletions[item.id])
       .forEach((item) => {
+        if (item.repeat === 'daily') return
         const itemDateTime = createDateTime(item.date, item.time)
         if (itemDateTime <= referenceDate) return
         notifications.push({
@@ -277,6 +294,24 @@ export async function schedulePlannerNotifications(planner: PlannerMeta | undefi
         })
       })
   }
+
+  customItems
+    .filter((item) => item.repeat === 'daily')
+    .forEach((item) => {
+      const [hour, minute] = item.time.split(':').map((value) => Number.parseInt(value, 10))
+      notifications.push({
+        id: plannerNotificationId(`daily-custom-${item.id}`),
+        title: item.title,
+        body: `Daily reminder for ${item.time}.`,
+        schedule: {
+          on: { hour, minute },
+          repeats: true,
+          allowWhileIdle: true,
+        },
+        channelId: 'planner-reminders',
+        extra: { kind: 'planner', taskId: item.id, required: false, loop: 'daily-custom' },
+      })
+    })
 
   if (notifications.length > 0) {
     await LocalNotifications.schedule({ notifications })

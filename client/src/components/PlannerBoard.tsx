@@ -8,10 +8,13 @@ import {
   getPlannerEntries,
   getRequiredReminderLabel,
   getReminderTimes,
+  parsePlannerDate,
   removePlannerItem,
   schedulePlannerNotifications,
+  shiftPlannerDate,
   updatePlannerCompletion,
   type PlannerMeta,
+  type PlannerRepeat,
   type RequiredPlannerTaskKey,
 } from '../utils/planner'
 import { todayKey } from '../utils/wellness'
@@ -23,14 +26,82 @@ type Props = {
   onMetaSaved?: () => void
 }
 
+type CalendarMode = 'day' | 'week' | 'month' | 'year'
+
 const requiredTaskOrder: RequiredPlannerTaskKey[] = ['water', 'exercise', 'meditation']
+const calendarModes: CalendarMode[] = ['day', 'week', 'month', 'year']
+
+function getStartOfWeek(dateKey: string) {
+  const date = parsePlannerDate(dateKey)
+  const offset = (date.getDay() + 6) % 7
+  date.setDate(date.getDate() - offset)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function getWeekDates(dateKey: string) {
+  const start = getStartOfWeek(dateKey)
+  return Array.from({ length: 7 }, (_, index) => shiftPlannerDate(start, index))
+}
+
+function getMonthCells(dateKey: string) {
+  const anchor = parsePlannerDate(dateKey)
+  const year = anchor.getFullYear()
+  const month = anchor.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const offset = (firstDay.getDay() + 6) % 7
+  firstDay.setDate(firstDay.getDate() - offset)
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const cell = new Date(firstDay)
+    cell.setDate(firstDay.getDate() + index)
+    const cellKey = `${cell.getFullYear()}-${String(cell.getMonth() + 1).padStart(2, '0')}-${String(cell.getDate()).padStart(2, '0')}`
+    return {
+      dateKey: cellKey,
+      inMonth: cell.getMonth() === month,
+      dayNumber: cell.getDate(),
+    }
+  })
+}
+
+function getYearMonths(dateKey: string) {
+  const year = parsePlannerDate(dateKey).getFullYear()
+  return Array.from({ length: 12 }, (_, index) => {
+    const monthDate = new Date(year, index, 1)
+    return {
+      key: `${year}-${String(index + 1).padStart(2, '0')}-01`,
+      label: monthDate.toLocaleDateString(undefined, { month: 'long' }),
+    }
+  })
+}
+
+function formatWeekdayShort(dateKey: string) {
+  return parsePlannerDate(dateKey).toLocaleDateString(undefined, { weekday: 'short' })
+}
+
+function getDaySummary(dateKey: string, planner: PlannerMeta | undefined) {
+  const entries = getPlannerEntries(dateKey, planner)
+  const required = entries.filter((entry) => entry.required)
+  const requiredCompleted = required.filter((entry) => entry.completed).length
+  const customCount = entries.filter((entry) => !entry.required).length
+  const completedCount = entries.filter((entry) => entry.completed).length
+
+  return {
+    entries,
+    requiredCompleted,
+    requiredTotal: required.length,
+    customCount,
+    completedCount,
+  }
+}
 
 export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved }: Props) {
   const [meta, setMeta] = useState<ProfileMeta>({})
   const [selectedDate, setSelectedDate] = useState(todayKey())
+  const [calendarMode, setCalendarMode] = useState<CalendarMode>('week')
   const [customTitle, setCustomTitle] = useState('')
   const [customTime, setCustomTime] = useState('12:00')
   const [customDate, setCustomDate] = useState(todayKey())
+  const [customRepeat, setCustomRepeat] = useState<PlannerRepeat>('once')
   const [saveMessage, setSaveMessage] = useState('Reminders are ready to configure.')
   const [isSaving, setIsSaving] = useState(false)
 
@@ -41,8 +112,7 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
         const response = await fetch(apiUrl('/api/meta'), { headers: { authorization: `Bearer ${token}` } })
         if (!response.ok) return
         const payload = await response.json()
-        const nextMeta = payload.meta || {}
-        setMeta(nextMeta)
+        setMeta(payload.meta || {})
       } catch (error) {
         console.error(error)
       }
@@ -51,24 +121,20 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
     void load()
   }, [user, token])
 
-  const planner = meta.planner || { remindersEnabled: true, reminderTimes: defaultReminderTimes, customItems: [], completions: {} }
-  const reminderTimes = getReminderTimes(planner)
-  const plannerEntries = useMemo(() => getPlannerEntries(selectedDate, planner), [planner, selectedDate])
-  const requiredEntries = plannerEntries.filter((entry) => entry.required)
-  const customEntries = plannerEntries.filter((entry) => !entry.required)
-  const requiredCompleted = requiredEntries.filter((entry) => entry.completed).length
-  const quickDates = useMemo(() => {
-    return Array.from({ length: 4 }, (_, index) => {
-      const nextDate = new Date()
-      nextDate.setHours(0, 0, 0, 0)
-      nextDate.setDate(nextDate.getDate() + index)
-      return `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`
-    })
-  }, [])
-
   useEffect(() => {
     setCustomDate(selectedDate)
   }, [selectedDate])
+
+  const planner = meta.planner || { remindersEnabled: true, reminderTimes: defaultReminderTimes, customItems: [], completions: {} }
+  const reminderTimes = getReminderTimes(planner)
+  const selectedSummary = useMemo(() => getDaySummary(selectedDate, planner), [planner, selectedDate])
+  const plannerEntries = selectedSummary.entries
+  const requiredEntries = plannerEntries.filter((entry) => entry.required)
+  const customEntries = plannerEntries.filter((entry) => !entry.required)
+  const weekDates = useMemo(() => getWeekDates(selectedDate), [selectedDate])
+  const monthCells = useMemo(() => getMonthCells(selectedDate), [selectedDate])
+  const yearMonths = useMemo(() => getYearMonths(selectedDate), [selectedDate])
+  const quickDates = useMemo(() => Array.from({ length: 4 }, (_, index) => shiftPlannerDate(todayKey(), index)), [])
 
   async function persistPlanner(nextPlanner: PlannerMeta, message: string) {
     const previousPlanner = meta.planner
@@ -101,9 +167,9 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
     }
   }
 
-  async function toggleRequired(taskId: string, completed: boolean) {
+  async function toggleEntry(taskId: string, completed: boolean) {
     const nextPlanner = updatePlannerCompletion(planner, selectedDate, taskId, completed)
-    await persistPlanner(nextPlanner, completed ? 'Task marked complete. Pending reminders were updated.' : 'Task marked incomplete. Reminders restored.')
+    await persistPlanner(nextPlanner, completed ? 'Task marked complete. Progress and reminders updated.' : 'Task reopened. Reminders restored.')
   }
 
   async function saveReminderTime(key: RequiredPlannerTaskKey, value: string) {
@@ -125,14 +191,18 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
       setSaveMessage('Add a task title before saving a reminder.')
       return
     }
+
     const nextPlanner = addPlannerItem(planner, {
       id: `custom-${Date.now()}`,
       title: customTitle.trim(),
       date: customDate,
       time: customTime,
+      repeat: customRepeat,
     })
+
     setCustomTitle('')
-    await persistPlanner(nextPlanner, 'Planner task added.')
+    setCustomRepeat('once')
+    await persistPlanner(nextPlanner, customRepeat === 'daily' ? 'Daily repeating task added.' : 'Planner task added.')
   }
 
   async function removeCustomTask(taskId: string) {
@@ -161,20 +231,24 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
     }
   }
 
+  const monthlySnapshot = monthCells.filter((cell) => cell.inMonth).map((cell) => ({ ...cell, summary: getDaySummary(cell.dateKey, planner) }))
+  const monthRequiredDone = monthlySnapshot.reduce((sum, cell) => sum + cell.summary.requiredCompleted, 0)
+  const monthRequiredTotal = monthlySnapshot.reduce((sum, cell) => sum + cell.summary.requiredTotal, 0)
+
   return (
     <div>
       <div className="module-meta">
         <h2>Planner</h2>
-        <p>Water, exercise, and meditation are included every day. Add extra reminders with your own date and time.</p>
-        <div className="session-reward">Required daily items keep sending reminders until you tick them complete.</div>
+        <p>Run your day from one place with required habits, timed tasks, and repeat rules that show up across daily, weekly, monthly, and yearly views.</p>
+        <div className="session-reward">Water, exercise, and meditation stay in the planner every day. You can add one-time or daily repeating tasks around them.</div>
       </div>
 
-      <div className="planner-layout">
-        <section className="planner-card card inset-card">
+      <div className="planner-layout planner-layout-wide">
+        <section className="planner-card card inset-card planner-calendar-card">
           <div className="section-heading">
             <div>
-              <div className="section-kicker">Daily schedule</div>
-              <h3>{selectedDate === todayKey() ? 'Today' : formatPlannerDate(selectedDate)}</h3>
+              <div className="section-kicker">Calendar</div>
+              <h3>{calendarMode === 'year' ? parsePlannerDate(selectedDate).getFullYear() : formatPlannerDate(selectedDate)}</h3>
             </div>
             <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
           </div>
@@ -191,21 +265,141 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
             ))}
           </div>
 
+          <div className="planner-view-toggle">
+            {calendarModes.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={`planner-mode-chip ${calendarMode === mode ? 'active' : ''}`}
+                onClick={() => setCalendarMode(mode)}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+
           <div className="mini-stats planner-stats">
             <div>
-              <strong>{requiredCompleted}/3</strong>
+              <strong>{selectedSummary.requiredCompleted}/{selectedSummary.requiredTotal}</strong>
               <span>Required done</span>
             </div>
             <div>
-              <strong>{customEntries.length}</strong>
-              <span>Custom items</span>
+              <strong>{selectedSummary.customCount}</strong>
+              <span>Custom tasks</span>
             </div>
             <div>
-              <strong>{planner.remindersEnabled === false ? 'Off' : 'On'}</strong>
-              <span>Reminders</span>
+              <strong>{monthRequiredTotal === 0 ? 0 : Math.round((monthRequiredDone / monthRequiredTotal) * 100)}%</strong>
+              <span>Month routine</span>
             </div>
           </div>
 
+          {calendarMode === 'day' && (
+            <div className="planner-day-board">
+              <div className="planner-section-head">
+                <div className="section-kicker">Selected day</div>
+                <span className="muted">{formatPlannerDate(selectedDate)}</span>
+              </div>
+              <div className="planner-task-list">
+                {plannerEntries.map((entry) => (
+                  <div key={entry.id} className={`planner-item ${entry.completed ? 'done' : ''} ${entry.required ? 'required' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={entry.completed}
+                      onChange={(event) => void toggleEntry(entry.id, event.target.checked)}
+                      disabled={isSaving}
+                    />
+                    <div className="planner-item-copy">
+                      <strong>{entry.title}</strong>
+                      <span>
+                        {entry.time} {entry.required ? 'Required every day' : entry.repeat === 'daily' ? 'Repeats daily' : 'One-time task'}
+                      </span>
+                    </div>
+                    {!entry.required && (
+                      <button type="button" className="ghost-btn" onClick={() => void removeCustomTask(entry.id)} disabled={isSaving}>Remove</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {calendarMode === 'week' && (
+            <div className="planner-week-grid">
+              {weekDates.map((dateKey) => {
+                const summary = getDaySummary(dateKey, planner)
+                return (
+                  <button
+                    key={dateKey}
+                    type="button"
+                    className={`planner-week-card ${selectedDate === dateKey ? 'active' : ''}`}
+                    onClick={() => setSelectedDate(dateKey)}
+                  >
+                    <span className="planner-weekday">{formatWeekdayShort(dateKey)}</span>
+                    <strong>{parsePlannerDate(dateKey).getDate()}</strong>
+                    <span>{summary.requiredCompleted}/{summary.requiredTotal} required</span>
+                    <span>{summary.customCount} custom</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {calendarMode === 'month' && (
+            <div className="planner-month-board">
+              <div className="planner-month-head">
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+                  <span key={day}>{day}</span>
+                ))}
+              </div>
+              <div className="planner-month-grid">
+                {monthCells.map((cell) => {
+                  const summary = getDaySummary(cell.dateKey, planner)
+                  return (
+                    <button
+                      key={cell.dateKey}
+                      type="button"
+                      className={`planner-month-cell ${cell.inMonth ? '' : 'outside'} ${selectedDate === cell.dateKey ? 'active' : ''}`}
+                      onClick={() => setSelectedDate(cell.dateKey)}
+                    >
+                      <strong>{cell.dayNumber}</strong>
+                      <span>{summary.requiredCompleted}/{summary.requiredTotal}</span>
+                      <small>{summary.customCount} tasks</small>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {calendarMode === 'year' && (
+            <div className="planner-year-grid">
+              {yearMonths.map((month) => {
+                const monthDays = getMonthCells(month.key).filter((cell) => cell.inMonth)
+                const requiredDone = monthDays.reduce((sum, cell) => sum + getDaySummary(cell.dateKey, planner).requiredCompleted, 0)
+                const requiredTotal = monthDays.reduce((sum, cell) => sum + getDaySummary(cell.dateKey, planner).requiredTotal, 0)
+                const customCount = monthDays.reduce((sum, cell) => sum + getDaySummary(cell.dateKey, planner).customCount, 0)
+                return (
+                  <button
+                    key={month.key}
+                    type="button"
+                    className="planner-year-card"
+                    onClick={() => {
+                      setSelectedDate(month.key)
+                      setCalendarMode('month')
+                    }}
+                  >
+                    <strong>{month.label}</strong>
+                    <span>{requiredTotal === 0 ? 0 : Math.round((requiredDone / requiredTotal) * 100)}% routine complete</span>
+                    <small>{customCount} scheduled custom tasks</small>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="planner-card card inset-card">
+          <div className="section-kicker">Daily agenda</div>
           <div className="planner-reminder-toggle">
             <label className="check-row">
               <input
@@ -214,38 +408,35 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
                 onChange={(event) => void toggleReminders(event.target.checked)}
                 disabled={isSaving}
               />
-              <span>Enable repeating reminders</span>
+              <span>Enable reminders</span>
             </label>
-            <button onClick={() => void enableReminderPermissions()} disabled={isSaving}>Refresh notification schedule</button>
+            <button onClick={() => void enableReminderPermissions()} disabled={isSaving}>Refresh schedule</button>
           </div>
 
           <div className="planner-section-head">
             <div className="section-kicker">Required every day</div>
-            <span className="muted">These reminders repeat until completed.</span>
+            <span className="muted">These habits always appear and keep reminding until completed.</span>
           </div>
           <div className="planner-task-list">
             {requiredEntries.map((entry) => (
-              <div key={entry.id} className={`planner-item ${entry.completed ? 'done' : ''} ${entry.required ? 'required' : ''}`}>
+              <div key={entry.id} className={`planner-item ${entry.completed ? 'done' : ''} required`}>
                 <input
                   type="checkbox"
                   checked={entry.completed}
-                  onChange={(event) => void toggleRequired(entry.id, event.target.checked)}
+                  onChange={(event) => void toggleEntry(entry.id, event.target.checked)}
                   disabled={isSaving}
                 />
                 <div className="planner-item-copy">
                   <strong>{entry.title}</strong>
-                  <span>{entry.time} {entry.required ? 'Required every day' : 'Custom reminder'}</span>
+                  <span>{entry.time} Required every day</span>
                 </div>
-                {!entry.required && (
-                  <button type="button" className="ghost-btn" onClick={() => void removeCustomTask(entry.id)}>Remove</button>
-                )}
               </div>
             ))}
           </div>
 
           <div className="planner-section-head planner-section-spaced">
-            <div className="section-kicker">Custom reminders</div>
-            <span className="muted">Add reminders for specific tasks, dates, and times.</span>
+            <div className="section-kicker">Selected date tasks</div>
+            <span className="muted">{formatPlannerDate(selectedDate)}</span>
           </div>
           <div className="planner-task-list">
             {customEntries.length > 0 ? customEntries.map((entry) => (
@@ -253,19 +444,19 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
                 <input
                   type="checkbox"
                   checked={entry.completed}
-                  onChange={(event) => void toggleRequired(entry.id, event.target.checked)}
+                  onChange={(event) => void toggleEntry(entry.id, event.target.checked)}
                   disabled={isSaving}
                 />
                 <div className="planner-item-copy">
                   <strong>{entry.title}</strong>
-                  <span>{formatPlannerDate(entry.date)} at {entry.time}</span>
+                  <span>{entry.repeat === 'daily' ? `Daily at ${entry.time}` : `${formatPlannerDate(entry.date)} at ${entry.time}`}</span>
                 </div>
                 <button type="button" className="ghost-btn" onClick={() => void removeCustomTask(entry.id)} disabled={isSaving}>Remove</button>
               </div>
             )) : (
               <div className="empty-panel">
-                <h4>No custom reminders</h4>
-                <p>Add tasks below for calls, study sessions, appointments, or anything else with a date and time.</p>
+                <h4>No custom tasks</h4>
+                <p>Use the form below to add one-time tasks or daily repeating items that will appear across the calendar.</p>
               </div>
             )}
           </div>
@@ -286,7 +477,6 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
               </label>
             ))}
           </div>
-          <p className="muted">These items appear every day in the planner and continue to remind you until you check them off.</p>
           <div className="planner-cadence-grid">
             {requiredTaskOrder.map((taskKey) => (
               <article key={taskKey} className="planner-cadence-card">
@@ -299,23 +489,30 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
         </section>
 
         <section className="planner-card card inset-card planner-add-card">
-          <div className="section-kicker">Add planner item</div>
-          <div className="planner-form">
+          <div className="section-kicker">Add task</div>
+          <div className="planner-form planner-form-wide">
             <label>
               Task
-              <input value={customTitle} onChange={(event) => setCustomTitle(event.target.value)} placeholder="Add a reminder task" disabled={isSaving} />
+              <input value={customTitle} onChange={(event) => setCustomTitle(event.target.value)} placeholder="Add a planner task" disabled={isSaving} />
             </label>
             <label>
-              Date
+              Starts on
               <input type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} disabled={isSaving} />
             </label>
             <label>
               Time
               <input type="time" value={customTime} onChange={(event) => setCustomTime(event.target.value)} disabled={isSaving} />
             </label>
+            <label>
+              Repeat
+              <select value={customRepeat} onChange={(event) => setCustomRepeat(event.target.value as PlannerRepeat)} disabled={isSaving}>
+                <option value="once">One time</option>
+                <option value="daily">Daily</option>
+              </select>
+            </label>
           </div>
           <div className="controls">
-            <button onClick={() => void addCustomTask()} disabled={isSaving}>Add reminder</button>
+            <button onClick={() => void addCustomTask()} disabled={isSaving}>Add task</button>
           </div>
           <p className="muted">{saveMessage}</p>
         </section>

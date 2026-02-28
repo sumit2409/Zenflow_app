@@ -137,10 +137,9 @@ select {
 
 .app-root {
   position: relative;
-  max-width: 1180px;
-  width: min(1180px, 100%);
+  width: 100%;
   margin: 0 auto;
-  padding: 22px 18px 56px;
+  padding: 18px 14px 56px;
 }
 
 main {
@@ -1081,8 +1080,7 @@ input[type='number']:focus {
 }
 
 .focus-card {
-  max-width: 920px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .back,
@@ -1135,6 +1133,8 @@ input[type='number']:focus {
 
 input[type='number'],
 input[type='date'],
+.planner-form select,
+.planner-time-grid select,
 .todo-entry input,
 .profile-grid input,
 .task-picker select,
@@ -1300,6 +1300,10 @@ input[type='date'],
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: 18px;
+}
+
+.planner-layout-wide {
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
 }
 
 .difficulty-switch {
@@ -1693,6 +1697,10 @@ input[type='date'],
   grid-column: 1 / -1;
 }
 
+.planner-calendar-card {
+  grid-row: span 2;
+}
+
 .planner-reminder-toggle {
   display: flex;
   flex-wrap: wrap;
@@ -1709,6 +1717,10 @@ input[type='date'],
   gap: 12px;
 }
 
+.planner-form-wide {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .planner-time-grid label,
 .planner-form label {
   display: grid;
@@ -1718,6 +1730,97 @@ input[type='date'],
 .planner-task-list {
   display: grid;
   gap: 12px;
+}
+
+.planner-view-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.planner-mode-chip,
+.planner-date-chip {
+  text-transform: capitalize;
+}
+
+.planner-mode-chip.active,
+.planner-date-chip.active,
+.planner-week-card.active,
+.planner-month-cell.active,
+.planner-year-card:hover {
+  background: linear-gradient(135deg, rgba(125, 149, 119, 0.95), rgba(174, 131, 89, 0.95));
+  color: #fff9f2;
+  border-color: transparent;
+}
+
+.planner-day-board,
+.planner-month-board {
+  display: grid;
+  gap: 14px;
+}
+
+.planner-week-grid,
+.planner-year-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.planner-week-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.planner-week-card,
+.planner-year-card,
+.planner-month-cell {
+  display: grid;
+  gap: 6px;
+  min-height: 110px;
+  padding: 14px 12px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  text-align: left;
+}
+
+.planner-week-card span,
+.planner-year-card span,
+.planner-year-card small,
+.planner-month-cell span,
+.planner-month-cell small,
+.chart-note {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.planner-weekday {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+}
+
+.planner-month-head {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.planner-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.planner-month-cell.outside {
+  opacity: 0.45;
+}
+
+.planner-year-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .planner-cadence-grid {
@@ -2228,6 +2331,15 @@ input[type='date'],
     grid-template-columns: 1fr;
   }
 
+  .planner-layout-wide,
+  .planner-week-grid,
+  .planner-month-head,
+  .planner-month-grid,
+  .planner-year-grid,
+  .planner-form-wide {
+    grid-template-columns: 1fr;
+  }
+
   .auth-grid,
   .password-field {
     grid-template-columns: 1fr;
@@ -2246,6 +2358,12 @@ input[type='date'],
   .primary-cta {
     width: 100%;
     justify-content: center;
+  }
+
+  .planner-week-card,
+  .planner-month-cell,
+  .planner-year-card {
+    min-height: auto;
   }
 
   .site-footer,
