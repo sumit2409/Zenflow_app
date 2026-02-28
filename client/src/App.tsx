@@ -129,6 +129,15 @@ export default function App() {
     void schedulePlannerNotifications(profileMeta.planner)
   }, [account, token, profileMeta.planner])
 
+  useEffect(() => {
+    const theme = profileMeta.appearance?.theme || 'sand'
+    document.documentElement.setAttribute('data-theme', theme)
+
+    return () => {
+      document.documentElement.removeAttribute('data-theme')
+    }
+  }, [profileMeta.appearance?.theme])
+
   const setView = (view: string | null) => setSelected(view)
 
   function openAuth(mode: 'login' | 'register', goal?: GoalIntent) {

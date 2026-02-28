@@ -39,9 +39,9 @@ const requiredTaskDefinitions: Array<{ key: RequiredPlannerTaskKey; title: strin
 ]
 
 const requiredReminderSteps: Record<RequiredPlannerTaskKey, number[]> = {
-  water: [0, 10, 20, 30, 45, 60],
-  exercise: [0, 15, 30, 45],
-  meditation: [0, 15, 30, 45],
+  water: [10, 20, 30, 45, 60],
+  exercise: [15, 30, 45],
+  meditation: [15, 30, 45],
 }
 
 function createDateTime(dateKey: string, time: string) {
@@ -195,6 +195,22 @@ export async function schedulePlannerNotifications(planner: PlannerMeta | undefi
   const completions = planner?.completions || {}
   const customItems = planner?.customItems || []
 
+  requiredTaskDefinitions.forEach((task, taskIndex) => {
+    const [hour, minute] = reminderTimes[task.key].split(':').map((value) => Number.parseInt(value, 10))
+    notifications.push({
+      id: plannerNotificationId(`daily-${task.key}`),
+      title: task.title,
+      body: `Daily routine reminder for ${reminderTimes[task.key]}.`,
+      schedule: {
+        on: { hour, minute },
+        repeats: true,
+        allowWhileIdle: true,
+      },
+      channelId: 'planner-reminders',
+      extra: { kind: 'planner', taskId: `required-${task.key}`, required: true, order: taskIndex, loop: 'daily-base' },
+    })
+  })
+
   for (let dayOffset = 0; dayOffset < 5; dayOffset += 1) {
     const date = new Date(referenceDate)
     date.setHours(0, 0, 0, 0)
@@ -216,12 +232,12 @@ export async function schedulePlannerNotifications(planner: PlannerMeta | undefi
         if (reminderDateTime <= referenceDate) return
 
         notifications.push({
-          id: plannerNotificationId(`${dateKey}-${taskId}-${reminderIndex}`),
+          id: plannerNotificationId(`${dateKey}-${taskId}-followup-${reminderIndex}`),
           title: task.title,
-          body: reminderIndex === 0 ? `${task.title} is scheduled for ${baseTime}.` : `${task.title} is still pending. Open the planner and tick it complete.`,
+          body: `${task.title} is still pending. Open the planner and tick it complete.`,
           schedule: { at: reminderDateTime, allowWhileIdle: true },
           channelId: 'planner-reminders',
-          extra: { kind: 'planner', dateKey, taskId, required: true, order: taskIndex, reminderIndex },
+          extra: { kind: 'planner', dateKey, taskId, required: true, order: taskIndex, reminderIndex, loop: 'follow-up' },
         })
       })
     })

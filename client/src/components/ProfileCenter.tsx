@@ -4,11 +4,20 @@ import { type ProfileMeta, type TodoItem } from '../utils/profile'
 import { apiUrl } from '../utils/api'
 
 type Props = { user: string | null; token?: string | null; onRequireLogin?: () => void; onMetaSaved?: () => void }
+type ThemeOption = 'sand' | 'forest' | 'ocean' | 'sunset'
+
+const themeOptions: Array<{ id: ThemeOption; label: string; note: string }> = [
+  { id: 'sand', label: 'Sand', note: 'Warm neutral background' },
+  { id: 'forest', label: 'Forest', note: 'Soft green background' },
+  { id: 'ocean', label: 'Ocean', note: 'Cool blue background' },
+  { id: 'sunset', label: 'Sunset', note: 'Muted coral background' },
+]
 
 export default function ProfileCenter({ user, token, onRequireLogin, onMetaSaved }: Props) {
   const today = todayKey()
   const [meta, setMeta] = useState<ProfileMeta>({})
   const [profile, setProfile] = useState({ heightCm: '', weightKg: '', dateOfBirth: '' })
+  const [theme, setTheme] = useState<ThemeOption>('sand')
   const [journal, setJournal] = useState('')
   const [todoText, setTodoText] = useState('')
   const [todos, setTodos] = useState<TodoItem[]>([])
@@ -28,6 +37,7 @@ export default function ProfileCenter({ user, token, onRequireLogin, onMetaSaved
           weightKg: nextMeta.profile?.weightKg || '',
           dateOfBirth: nextMeta.profile?.dateOfBirth || '',
         })
+        setTheme(nextMeta.appearance?.theme || 'sand')
         setJournal(nextMeta.journals?.[today] || '')
         setTodos(nextMeta.todosByDate?.[today] || [])
         setSaveNote('Your private space is synced.')
@@ -64,6 +74,14 @@ export default function ProfileCenter({ user, token, onRequireLogin, onMetaSaved
         heightCm: profile.heightCm,
         weightKg: profile.weightKg,
         dateOfBirth: profile.dateOfBirth,
+      },
+    })
+  }
+
+  function saveAppearance() {
+    void persistMeta({
+      appearance: {
+        theme,
       },
     })
   }
@@ -145,6 +163,28 @@ export default function ProfileCenter({ user, token, onRequireLogin, onMetaSaved
             <button onClick={saveProfile}>Save profile</button>
           </div>
           <p className="muted">{saveNote}</p>
+        </section>
+
+        <section className="journal-card card inset-card">
+          <div className="section-kicker">App theme</div>
+          <div className="theme-grid">
+            {themeOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`theme-swatch ${theme === option.id ? 'active' : ''}`}
+                onClick={() => setTheme(option.id)}
+              >
+                <span className={`theme-preview theme-preview-${option.id}`} />
+                <strong>{option.label}</strong>
+                <small>{option.note}</small>
+              </button>
+            ))}
+          </div>
+          <div className="controls">
+            <button onClick={saveAppearance}>Save theme</button>
+          </div>
+          <p className="muted">Pick the background color that feels best for you. It stays with your account.</p>
         </section>
 
         <section className="journal-card card inset-card">

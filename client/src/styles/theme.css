@@ -28,6 +28,54 @@
   --space-8: 40px;
 }
 
+:root[data-theme='forest'] {
+  --bg-cream: #e8efe6;
+  --bg-sand: #c7d8c3;
+  --bg-clay: #6f8a66;
+  --bg-mist: #f4f8f2;
+  --ink: #213126;
+  --ink-soft: #536655;
+  --sage: #6a8b63;
+  --sage-soft: #dce9d6;
+  --amber: #b89a68;
+  --amber-soft: #ece2d2;
+  --card: rgba(245, 250, 243, 0.8);
+  --card-strong: rgba(250, 252, 248, 0.92);
+  --line: rgba(51, 77, 57, 0.14);
+}
+
+:root[data-theme='ocean'] {
+  --bg-cream: #e6eef4;
+  --bg-sand: #cadce8;
+  --bg-clay: #5e88a5;
+  --bg-mist: #f4f8fb;
+  --ink: #203245;
+  --ink-soft: #577086;
+  --sage: #5f8ea7;
+  --sage-soft: #d8e7f0;
+  --amber: #e0a26b;
+  --amber-soft: #f1dfce;
+  --card: rgba(244, 249, 252, 0.82);
+  --card-strong: rgba(249, 252, 254, 0.93);
+  --line: rgba(50, 77, 101, 0.14);
+}
+
+:root[data-theme='sunset'] {
+  --bg-cream: #f5e6df;
+  --bg-sand: #ebcbc0;
+  --bg-clay: #c57c6c;
+  --bg-mist: #fcf5f1;
+  --ink: #3b2624;
+  --ink-soft: #7f5b55;
+  --sage: #a36d63;
+  --sage-soft: #f0ddd8;
+  --amber: #d99873;
+  --amber-soft: #f4dfd4;
+  --card: rgba(255, 247, 243, 0.82);
+  --card-strong: rgba(255, 250, 247, 0.94);
+  --line: rgba(96, 59, 53, 0.14);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1735,6 +1783,61 @@ input[type='date'],
   gap: 12px;
 }
 
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.theme-swatch {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  min-height: 132px;
+  padding: 14px;
+  border-radius: 20px;
+  text-align: left;
+}
+
+.theme-swatch.active {
+  border-color: rgba(125, 149, 119, 0.42);
+  box-shadow: 0 14px 34px rgba(77, 49, 31, 0.12);
+}
+
+.theme-swatch strong,
+.theme-swatch small {
+  display: block;
+}
+
+.theme-swatch small {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.theme-preview {
+  width: 100%;
+  height: 62px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.theme-preview-sand {
+  background: linear-gradient(135deg, #efe3d5, #f7efe6 46%, #d7a36d);
+}
+
+.theme-preview-forest {
+  background: linear-gradient(135deg, #e8efe6, #f4f8f2 46%, #6a8b63);
+}
+
+.theme-preview-ocean {
+  background: linear-gradient(135deg, #e6eef4, #f4f8fb 46%, #5f8ea7);
+}
+
+.theme-preview-sunset {
+  background: linear-gradient(135deg, #f5e6df, #fcf5f1 46%, #d99873);
+}
+
 .profile-grid label,
 .goal label {
   display: grid;
@@ -2120,7 +2223,8 @@ input[type='date'],
 
   .planner-time-grid,
   .planner-form,
-  .planner-cadence-grid {
+  .planner-cadence-grid,
+  .theme-grid {
     grid-template-columns: 1fr;
   }
 

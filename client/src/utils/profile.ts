@@ -9,6 +9,9 @@ export type TodoItem = {
 }
 
 export type ProfileMeta = WellnessMeta & {
+  appearance?: {
+    theme?: 'sand' | 'forest' | 'ocean' | 'sunset'
+  }
   profile?: {
     heightCm?: string
     weightKg?: string
