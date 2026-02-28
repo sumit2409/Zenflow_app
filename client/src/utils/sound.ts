@@ -51,8 +51,30 @@ export async function playStartChime() {
   await playSequence([392, 523.25], { duration: 0.1, gap: 0.04, volume: 0.045, type: 'triangle' })
 }
 
+export async function playPauseChime() {
+  await playSequence([523.25, 392], { duration: 0.08, gap: 0.03, volume: 0.035, type: 'triangle' })
+}
+
 export async function playEndChime() {
   await playSequence([523.25, 659.25, 783.99], { duration: 0.14, gap: 0.05, volume: 0.055, type: 'sine' })
+}
+
+export async function playPomodoroCompleteChime() {
+  await playSequence([392, 523.25, 659.25, 783.99], {
+    duration: 0.16,
+    gap: 0.05,
+    volume: 0.06,
+    type: 'triangle',
+  })
+}
+
+export async function playMeditationBell() {
+  await playSequence([392, 523.25, 659.25, 783.99, 659.25], {
+    duration: 0.22,
+    gap: 0.08,
+    volume: 0.05,
+    type: 'sine',
+  })
 }
 
 export async function playVictoryFanfare() {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { playEndChime, playStartChime } from '../utils/sound'
+import { playPauseChime, playPomodoroCompleteChime, playStartChime } from '../utils/sound'
 import { todayKey } from '../utils/wellness'
 import { type ProfileMeta, type TodoItem } from '../utils/profile'
 import { apiUrl } from '../utils/api'
@@ -67,7 +67,7 @@ export default function PomodoroTimer({ user, token, onRequireLogin }: Props) {
   useEffect(() => {
     if (seconds !== 0 || completedRef.current) return
     completedRef.current = true
-    void playEndChime()
+    void playPomodoroCompleteChime()
 
     const minutes = currentPreset.current / 60
     if (user && token) {
@@ -104,7 +104,11 @@ export default function PomodoroTimer({ user, token, onRequireLogin }: Props) {
   const setPreset = (s: number) => { setSeconds(s); currentPreset.current = s; setRunning(false) }
 
   const toggleRunning = () => {
-    if (!running) void playStartChime()
+    if (!running) {
+      void playStartChime()
+    } else {
+      void playPauseChime()
+    }
     setRunning(r => !r)
   }
 

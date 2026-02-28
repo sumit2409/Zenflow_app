@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { createMeditationAmbience, playEndChime, playStartChime } from '../utils/sound'
+import { createMeditationAmbience, playMeditationBell, playPauseChime, playStartChime } from '../utils/sound'
 import { apiUrl } from '../utils/api'
 
 function todayKey(date = new Date()) {
@@ -41,7 +41,7 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
   useEffect(() => {
     if (seconds !== 0 || completedRef.current) return
     completedRef.current = true
-    void playEndChime()
+    void playMeditationBell()
 
     const minutes = currentPreset.current / 60
     if (user && token) {
@@ -54,7 +54,11 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
   const format = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,'0')}`
 
   const toggleRunning = () => {
-    if (!running) void playStartChime()
+    if (!running) {
+      void playStartChime()
+    } else {
+      void playPauseChime()
+    }
     setRunning(r => !r)
   }
 
@@ -75,6 +79,7 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
         <button onClick={toggleRunning}>{running ? 'Pause' : 'Start'}</button>
         <button onClick={() => { setRunning(false); setSeconds(presets[0]); currentPreset.current = presets[0] }}>Reset</button>
       </div>
+      <p className="muted">The meditation timer uses a softer bell at completion while the ambient tone is active.</p>
       <div className="pulse" aria-hidden />
     </div>
   )

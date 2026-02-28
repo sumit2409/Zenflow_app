@@ -38,6 +38,12 @@ const requiredTaskDefinitions: Array<{ key: RequiredPlannerTaskKey; title: strin
   { key: 'meditation', title: 'Meditation' },
 ]
 
+const requiredNotificationChannels: Record<RequiredPlannerTaskKey, { id: string; sound: string }> = {
+  water: { id: 'planner-water-reminders', sound: 'water_ping.wav' },
+  exercise: { id: 'planner-exercise-reminders', sound: 'exercise_alert.wav' },
+  meditation: { id: 'planner-meditation-reminders', sound: 'meditation_bell.wav' },
+}
+
 const requiredReminderSteps: Record<RequiredPlannerTaskKey, number[]> = {
   water: [10, 20, 30, 45, 60],
   exercise: [15, 30, 45],
@@ -180,6 +186,20 @@ export async function schedulePlannerNotifications(planner: PlannerMeta | undefi
     vibration: true,
   })
 
+  await Promise.all(
+    Object.entries(requiredNotificationChannels).map(([taskKey, channel]) =>
+      LocalNotifications.createChannel({
+        id: channel.id,
+        name: `${taskKey[0].toUpperCase()}${taskKey.slice(1)} reminders`,
+        description: `Required daily reminder sound for ${taskKey}.`,
+        importance: 5,
+        visibility: 1,
+        vibration: true,
+        sound: channel.sound,
+      })
+    )
+  )
+
   const pending = await LocalNotifications.getPending()
   const plannerNotifications = pending.notifications
     .filter((notification) => notification.extra?.kind === 'planner')
@@ -206,7 +226,7 @@ export async function schedulePlannerNotifications(planner: PlannerMeta | undefi
         repeats: true,
         allowWhileIdle: true,
       },
-      channelId: 'planner-reminders',
+      channelId: requiredNotificationChannels[task.key].id,
       extra: { kind: 'planner', taskId: `required-${task.key}`, required: true, order: taskIndex, loop: 'daily-base' },
     })
   })
@@ -236,7 +256,7 @@ export async function schedulePlannerNotifications(planner: PlannerMeta | undefi
           title: task.title,
           body: `${task.title} is still pending. Open the planner and tick it complete.`,
           schedule: { at: reminderDateTime, allowWhileIdle: true },
-          channelId: 'planner-reminders',
+          channelId: requiredNotificationChannels[task.key].id,
           extra: { kind: 'planner', dateKey, taskId, required: true, order: taskIndex, reminderIndex, loop: 'follow-up' },
         })
       })
