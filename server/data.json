@@ -1,0 +1,44 @@
+{
+  "users": {
+    "cliuser2": {
+      "password": "$2a$08$7RD6yzw9Xn9jXDmaiuh.suR1EUEiZpli7GNMppa/BtCihQjFzAhj.",
+      "created": 1772203884624
+    },
+    "dfgftcgh": {
+      "password": "$2a$08$UXFmnrTmcTgJGXKFymN.IOgbIic.vbasvf83njYnLUXCh0/gNPfNa",
+      "created": 1772203939531
+    },
+    "sumit": {
+      "password": "$2a$08$5pGQCi2.kQxNQjB8qblkwup9HtP.bn7ZigmS6bZXrHbNHqJt7Uvnm",
+      "created": 1772205044753
+    },
+    "lt_700328": {
+      "username": "lt_700328",
+      "usernameLower": "lt_700328",
+      "email": "lt_700328@example.com",
+      "emailLower": "lt_700328@example.com",
+      "fullName": "Local Test",
+      "password": "$2a$10$tjzcKLPpnG43CHHE5YefauQb.zdwh1GMq3w0Ukpf2CghACgnWe6XW",
+      "created": 1772302700642,
+      "lastLoginAt": 1772302701213,
+      "loginCount": 2
+    },
+    "mg_942209": {
+      "username": "mg_942209",
+      "usernameLower": "mg_942209",
+      "email": "mg_942209@example.com",
+      "emailLower": "mg_942209@example.com",
+      "fullName": "Mongo Test",
+      "password": "$2a$10$ygGSzKNZ71pM95yUufnQ4.dIervEQ3Qu7JvC1/aQjbyPJSF.0Am.O",
+      "created": 1772307942594,
+      "lastLoginAt": 1772307943363,
+      "loginCount": 2
+    }
+  },
+  "logs": {
+    "sumit": {
+      "2026-02-27": 0
+    }
+  },
+  "meta": {}
+}
