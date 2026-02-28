@@ -13,6 +13,7 @@ import { apiUrl } from './utils/api'
 import type { ProfileMeta } from './utils/profile'
 import PlannerBoard from './components/PlannerBoard'
 import { schedulePlannerNotifications } from './utils/planner'
+import { todayKey } from './utils/wellness'
 
 const LOCAL_SESSION_KEY = 'zenflow_session'
 const TEMP_SESSION_KEY = 'zenflow_session_temp'
@@ -69,6 +70,7 @@ export default function App() {
   const [showLogin, setShowLogin] = useState(false)
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const [goalIntent, setGoalIntent] = useState<GoalIntent | null>(null)
+  const [plannerFocusDate, setPlannerFocusDate] = useState(todayKey())
 
   const user = account?.username || null
 
@@ -139,6 +141,11 @@ export default function App() {
   }, [profileMeta.appearance?.theme])
 
   const setView = (view: string | null) => setSelected(view)
+
+  function openPlannerAt(dateKey: string) {
+    setPlannerFocusDate(dateKey)
+    setSelected('planner')
+  }
 
   function openAuth(mode: 'login' | 'register', goal?: GoalIntent) {
     setAuthMode(mode)
@@ -267,7 +274,7 @@ export default function App() {
                     ))}
                   </div>
                 </section>
-                <Dashboard onSelect={(id: string) => setView(id)} user={user} token={token} />
+                <Dashboard onSelect={(id: string) => setView(id)} onOpenPlannerDate={openPlannerAt} user={user} token={token} />
                 <section className="detail-strip fade-rise">
                   <article className="detail-card">
                     <h3>Focused layout</h3>
@@ -290,11 +297,11 @@ export default function App() {
         ) : (
           <section className="focus-card fade-rise">
             <button className="back" onClick={() => setView(null)}>&lt; Back to dashboard</button>
-            {selected === 'pomodoro' && <PomodoroTimer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
+            {selected === 'pomodoro' && <PomodoroTimer user={user} token={token} onRequireLogin={() => openAuth('login')} onSelect={setView} />}
             {selected === 'meditation' && <MeditationTimer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
             {selected === 'sudoku' && <SudokuTrainer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
             {selected === 'arcade' && <BrainArcade user={user} token={token} onRequireLogin={() => openAuth('login')} />}
-            {selected === 'planner' && <PlannerBoard user={user} token={token} onRequireLogin={() => openAuth('login')} onMetaSaved={() => setProfileRefreshKey((value) => value + 1)} />}
+            {selected === 'planner' && <PlannerBoard initialDate={plannerFocusDate} user={user} token={token} onRequireLogin={() => openAuth('login')} onMetaSaved={() => setProfileRefreshKey((value) => value + 1)} />}
             {selected === 'profile' && <ProfileCenter user={user} token={token} onRequireLogin={() => openAuth('login')} onMetaSaved={() => setProfileRefreshKey((value) => value + 1)} />}
           </section>
         )}

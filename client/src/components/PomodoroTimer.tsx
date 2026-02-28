@@ -1,26 +1,32 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { playPauseChime, playPomodoroCompleteChime, playStartChime } from '../utils/sound'
 import { todayKey } from '../utils/wellness'
 import { type ProfileMeta, type TodoItem } from '../utils/profile'
 import { apiUrl } from '../utils/api'
 
-function formatTime(s: number) {
-  const m = Math.floor(s / 60)
-  const sec = s % 60
-  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+function formatTime(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
-type Props = { user: string | null; token?: string | null; onRequireLogin?: () => void }
+type Props = { user: string | null; token?: string | null; onRequireLogin?: () => void; onSelect?: (view: string | null) => void }
+type Phase = 'work' | 'break'
 
-export default function PomodoroTimer({ user, token, onRequireLogin }: Props) {
-  const presets = { work: 25 * 60, short: 5 * 60, long: 15 * 60 }
-  const [seconds, setSeconds] = useState(presets.work)
+const WORK_MINUTES = 25
+const BONUS_POINTS_PER_TARGET = 120
+
+export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }: Props) {
+  const [phase, setPhase] = useState<Phase>('work')
+  const [breakMinutes, setBreakMinutes] = useState(5)
+  const [seconds, setSeconds] = useState(WORK_MINUTES * 60)
   const [running, setRunning] = useState(false)
   const [todos, setTodos] = useState<TodoItem[]>([])
   const [selectedTaskId, setSelectedTaskId] = useState('')
   const [todoMap, setTodoMap] = useState<Record<string, TodoItem[]>>({})
+  const [statusNote, setStatusNote] = useState('Assign a task, set a session goal, and start the cycle.')
   const timerRef = useRef<number | null>(null)
-  const currentPreset = useRef<number>(presets.work)
+  const phaseRef = useRef<Phase>('work')
   const completedRef = useRef(false)
 
   useEffect(() => {
@@ -35,7 +41,12 @@ export default function PomodoroTimer({ user, token, onRequireLogin }: Props) {
         const payload = await response.json()
         const meta: ProfileMeta = payload.meta || {}
         const todoByDate = meta.todosByDate || {}
-        const todayTodos = todoByDate[todayKey()] || []
+        const todayTodos = (todoByDate[todayKey()] || []).map((todo) => ({
+          assignedPomodoros: 1,
+          completedPomodoros: 0,
+          bonusAwarded: false,
+          ...todo,
+        }))
         setTodoMap(todoByDate)
         setTodos(todayTodos)
         if (todayTodos.length > 0 && !todayTodos.some((todo) => todo.id === selectedTaskId)) {
@@ -47,38 +58,28 @@ export default function PomodoroTimer({ user, token, onRequireLogin }: Props) {
     }
 
     void loadTasks()
-  }, [user, token])
+  }, [user, token, selectedTaskId])
+
+  useEffect(() => {
+    phaseRef.current = phase
+  }, [phase])
 
   useEffect(() => {
     if (running) {
-      timerRef.current = window.setInterval(() => setSeconds(s => s - 1), 1000)
+      timerRef.current = window.setInterval(() => setSeconds((value) => value - 1), 1000)
     } else if (timerRef.current) {
       clearInterval(timerRef.current)
       timerRef.current = null
     }
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
   }, [running])
 
   useEffect(() => {
     if (seconds > 0) completedRef.current = false
     if (seconds <= 0) setRunning(false)
   }, [seconds])
-
-  useEffect(() => {
-    if (seconds !== 0 || completedRef.current) return
-    completedRef.current = true
-    void playPomodoroCompleteChime()
-
-    const minutes = currentPreset.current / 60
-    if (user && token) {
-      fetch(apiUrl('/api/logs'), {method:'POST', headers:{'content-type':'application/json', authorization:`Bearer ${token}`}, body: JSON.stringify({date: todayKey(), type:'pomodoro', value: minutes})}).catch(e=>console.error(e))
-      if (selectedTaskId) {
-        void persistTaskProgress(selectedTaskId, false)
-      }
-    } else {
-      onRequireLogin?.()
-    }
-  }, [seconds, user, token, onRequireLogin])
 
   async function persistTodos(nextTodos: TodoItem[]) {
     setTodos(nextTodos)
@@ -92,35 +93,120 @@ export default function PomodoroTimer({ user, token, onRequireLogin }: Props) {
     })
   }
 
-  async function persistTaskProgress(taskId: string, markDone: boolean) {
+  async function updateTaskSessions(taskId: string, assignedPomodoros: number) {
     const nextTodos = todos.map((todo) =>
-      todo.id === taskId
-        ? { ...todo, done: markDone ? true : todo.done, focusCount: (todo.focusCount || 0) + (markDone ? 0 : 1) }
-        : todo
+      todo.id === taskId ? { ...todo, assignedPomodoros: Math.max(1, assignedPomodoros) } : todo
     )
     await persistTodos(nextTodos)
   }
 
-  const setPreset = (s: number) => { setSeconds(s); currentPreset.current = s; setRunning(false) }
+  async function persistTaskProgress(taskId: string) {
+    const currentTask = todos.find((todo) => todo.id === taskId)
+    if (!currentTask) return
+
+    const assignedPomodoros = Math.max(1, currentTask.assignedPomodoros || 1)
+    const completedPomodoros = (currentTask.completedPomodoros || 0) + 1
+    const cycleFinished = completedPomodoros >= assignedPomodoros
+    const nextTodos = todos.map((todo) =>
+      todo.id === taskId
+        ? {
+            ...todo,
+            done: cycleFinished ? true : todo.done,
+            focusCount: (todo.focusCount || 0) + 1,
+            completedPomodoros,
+            bonusAwarded: cycleFinished ? true : todo.bonusAwarded,
+          }
+        : todo
+    )
+
+    await persistTodos(nextTodos)
+
+    if (cycleFinished && user && token && !currentTask.bonusAwarded) {
+      await fetch(apiUrl('/api/logs'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ date: todayKey(), type: 'pomodoro_bonus', value: BONUS_POINTS_PER_TARGET }),
+      })
+      setStatusNote(`Task cycle complete. Bonus +${BONUS_POINTS_PER_TARGET} points awarded.`)
+    } else {
+      setStatusNote('Focus block saved. Break time started.')
+    }
+  }
+
+  useEffect(() => {
+    if (seconds !== 0 || completedRef.current) return
+    completedRef.current = true
+    void playPomodoroCompleteChime()
+
+    const taskId = selectedTaskId
+    const handlePhaseCompletion = async () => {
+      if (phaseRef.current === 'work') {
+        if (user && token) {
+          await fetch(apiUrl('/api/logs'), {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+            body: JSON.stringify({ date: todayKey(), type: 'pomodoro', value: WORK_MINUTES }),
+          })
+          if (taskId) {
+            await persistTaskProgress(taskId)
+          }
+        } else {
+          onRequireLogin?.()
+        }
+
+        setPhase('break')
+        setSeconds(Math.max(5, breakMinutes) * 60)
+        setRunning(true)
+        setStatusNote('Break started. Walk, stretch, or take a quick reset before the next focus block.')
+        return
+      }
+
+      setPhase('work')
+      setSeconds(WORK_MINUTES * 60)
+      setRunning(true)
+      setStatusNote('Break finished. The next 25-minute focus session has started.')
+      void playStartChime()
+    }
+
+    void handlePhaseCompletion()
+  }, [seconds, user, token, onRequireLogin, selectedTaskId, breakMinutes, todos])
+
+  const selectedTask = useMemo(
+    () => todos.find((todo) => todo.id === selectedTaskId) || null,
+    [todos, selectedTaskId]
+  )
+
+  const sessionTarget = Math.max(1, selectedTask?.assignedPomodoros || 1)
+  const completedSessions = selectedTask?.completedPomodoros || 0
+
+  const setWorkPhase = () => {
+    setPhase('work')
+    setSeconds(WORK_MINUTES * 60)
+    setRunning(false)
+    setStatusNote('Focus session reset.')
+  }
 
   const toggleRunning = () => {
     if (!running) {
       void playStartChime()
+      setStatusNote(phase === 'work' ? 'Focus session running.' : 'Break running.')
     } else {
       void playPauseChime()
+      setStatusNote('Cycle paused.')
     }
-    setRunning(r => !r)
+    setRunning((value) => !value)
   }
 
   return (
     <div>
       <div className="module-meta">
-        <h2>Deep Focus Session</h2>
-        <p>Work in focused intervals and take deliberate breaks to stay mentally fresh.</p>
-        <div className="session-reward">Complete a 25-minute block to feed your daily focus ritual.</div>
+        <h2>Deep Focus Cycle</h2>
+        <p>Each task can require one or more 25-minute focus sessions. Every work block rolls into a break before the next session begins.</p>
+        <div className="session-reward">Finish all assigned sessions for a task to unlock a bonus score.</div>
       </div>
+
       <div className="focus-task-panel card inset-card">
-        <div className="section-kicker">Task-linked focus</div>
+        <div className="section-kicker">Task-linked cycle</div>
         {todos.length > 0 ? (
           <>
             <label className="task-picker">
@@ -133,36 +219,86 @@ export default function PomodoroTimer({ user, token, onRequireLogin }: Props) {
                 ))}
               </select>
             </label>
+
+            {selectedTask && (
+              <div className="pomodoro-cycle-grid">
+                <label>
+                  Assigned sessions
+                  <input
+                    type="number"
+                    min={1}
+                    value={sessionTarget}
+                    onChange={(event) => void updateTaskSessions(selectedTask.id, Number(event.target.value))}
+                  />
+                </label>
+                <label>
+                  Break minutes
+                  <input
+                    type="number"
+                    min={5}
+                    value={breakMinutes}
+                    onChange={(event) => setBreakMinutes(Math.max(5, Number(event.target.value) || 5))}
+                  />
+                </label>
+              </div>
+            )}
+
             <div className="task-mini-list">
               {todos.slice(0, 4).map((todo) => (
                 <div key={todo.id} className={`todo-item dashboard ${todo.done ? 'done' : ''}`}>
                   <span>{todo.text}</span>
-                  <div className="task-meta-chip">{todo.focusCount || 0} blocks</div>
+                  <div className="task-meta-chip">
+                    {(todo.completedPomodoros || 0)}/{Math.max(1, todo.assignedPomodoros || 1)} sessions
+                  </div>
                 </div>
               ))}
             </div>
-            {selectedTaskId && (
-              <div className="controls">
-                <button onClick={() => void persistTaskProgress(selectedTaskId, true)}>Mark selected task done</button>
-              </div>
-            )}
           </>
         ) : (
           <div className="empty-panel">
             <h4>No tasks linked yet</h4>
-            <p>Create tasks in your profile room, then come back here to assign focus sessions to them.</p>
+            <p>Create tasks in your account screen, then come back here to assign the number of required focus sessions.</p>
           </div>
         )}
       </div>
-      <div className="timer-display">{formatTime(Math.max(0, seconds))}</div>
-      <div className="controls">
-        <button onClick={() => setPreset(presets.work)}>25 min</button>
-        <button onClick={() => setPreset(presets.short)}>5 min</button>
-        <button onClick={() => setPreset(presets.long)}>15 min</button>
-      </div>
-      <div className="controls">
-        <button onClick={toggleRunning}>{running ? 'Pause' : 'Start'}</button>
-        <button onClick={() => { setRunning(false); setSeconds(presets.work) }}>Reset</button>
+
+      <div className="cycle-panel card inset-card">
+        <div className="section-heading">
+          <div>
+            <div className="section-kicker">{phase === 'work' ? 'Work session' : 'Break session'}</div>
+            <h3>{phase === 'work' ? 'Focus on the selected task' : 'Reset before the next focus block'}</h3>
+          </div>
+          {selectedTask && (
+            <div className="task-meta-chip">
+              {completedSessions}/{sessionTarget} sessions complete
+            </div>
+          )}
+        </div>
+
+        <div className="timer-display">{formatTime(Math.max(0, seconds))}</div>
+        <p className="muted">{statusNote}</p>
+
+        <div className="controls">
+          <button onClick={toggleRunning}>{running ? 'Pause cycle' : phase === 'work' ? 'Start cycle' : 'Resume break'}</button>
+          <button onClick={setWorkPhase}>Reset to work</button>
+        </div>
+
+        {phase === 'break' && (
+          <div className="break-ideas">
+            <div className="achievement-pill unlocked">
+              <strong>Move</strong>
+              <span>Walk, stretch, or drink water while the break timer runs.</span>
+            </div>
+            <div className="achievement-pill unlocked">
+              <strong>Quick game</strong>
+              <span>Open the Games room for a fast reset, then come back for the next session.</span>
+            </div>
+            <div className="controls">
+              <button onClick={() => onSelect?.('arcade')}>Open games</button>
+              <button onClick={() => onSelect?.('planner')}>Open planner</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

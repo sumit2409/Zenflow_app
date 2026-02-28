@@ -8,6 +8,7 @@ import {
   getPlannerEntries,
   getRequiredReminderLabel,
   getReminderTimes,
+  movePlannerItem,
   parsePlannerDate,
   removePlannerItem,
   schedulePlannerNotifications,
@@ -20,6 +21,7 @@ import {
 import { todayKey } from '../utils/wellness'
 
 type Props = {
+  initialDate?: string
   user: string | null
   token?: string | null
   onRequireLogin?: () => void
@@ -94,9 +96,9 @@ function getDaySummary(dateKey: string, planner: PlannerMeta | undefined) {
   }
 }
 
-export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved }: Props) {
+export default function PlannerBoard({ initialDate, user, token, onRequireLogin, onMetaSaved }: Props) {
   const [meta, setMeta] = useState<ProfileMeta>({})
-  const [selectedDate, setSelectedDate] = useState(todayKey())
+  const [selectedDate, setSelectedDate] = useState(initialDate || todayKey())
   const [calendarMode, setCalendarMode] = useState<CalendarMode>('week')
   const [customTitle, setCustomTitle] = useState('')
   const [customTime, setCustomTime] = useState('12:00')
@@ -104,6 +106,7 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
   const [customRepeat, setCustomRepeat] = useState<PlannerRepeat>('once')
   const [saveMessage, setSaveMessage] = useState('Reminders are ready to configure.')
   const [isSaving, setIsSaving] = useState(false)
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -124,6 +127,13 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
   useEffect(() => {
     setCustomDate(selectedDate)
   }, [selectedDate])
+
+  useEffect(() => {
+    if (initialDate) {
+      setSelectedDate(initialDate)
+      setCalendarMode('day')
+    }
+  }, [initialDate])
 
   const planner = meta.planner || { remindersEnabled: true, reminderTimes: defaultReminderTimes, customItems: [], completions: {} }
   const reminderTimes = getReminderTimes(planner)
@@ -210,6 +220,12 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
     await persistPlanner(nextPlanner, 'Planner task removed.')
   }
 
+  async function moveTask(taskId: string, nextDate: string) {
+    const nextPlanner = movePlannerItem(planner, taskId, nextDate)
+    setSelectedDate(nextDate)
+    await persistPlanner(nextPlanner, `Task moved to ${formatPlannerDate(nextDate)}.`)
+  }
+
   async function toggleReminders(enabled: boolean) {
     const nextPlanner: PlannerMeta = {
       ...planner,
@@ -234,6 +250,22 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
   const monthlySnapshot = monthCells.filter((cell) => cell.inMonth).map((cell) => ({ ...cell, summary: getDaySummary(cell.dateKey, planner) }))
   const monthRequiredDone = monthlySnapshot.reduce((sum, cell) => sum + cell.summary.requiredCompleted, 0)
   const monthRequiredTotal = monthlySnapshot.reduce((sum, cell) => sum + cell.summary.requiredTotal, 0)
+
+  function bindDrop(dateKey: string) {
+    return {
+      onDragOver: (event: React.DragEvent<HTMLElement>) => {
+        if (!dragTaskId) return
+        event.preventDefault()
+      },
+      onDrop: (event: React.DragEvent<HTMLElement>) => {
+        event.preventDefault()
+        const taskId = event.dataTransfer.getData('text/planner-task') || dragTaskId
+        if (!taskId) return
+        setDragTaskId(null)
+        void moveTask(taskId, dateKey)
+      },
+    }
+  }
 
   return (
     <div>
@@ -333,6 +365,7 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
                     type="button"
                     className={`planner-week-card ${selectedDate === dateKey ? 'active' : ''}`}
                     onClick={() => setSelectedDate(dateKey)}
+                    {...bindDrop(dateKey)}
                   >
                     <span className="planner-weekday">{formatWeekdayShort(dateKey)}</span>
                     <strong>{parsePlannerDate(dateKey).getDate()}</strong>
@@ -360,6 +393,7 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
                       type="button"
                       className={`planner-month-cell ${cell.inMonth ? '' : 'outside'} ${selectedDate === cell.dateKey ? 'active' : ''}`}
                       onClick={() => setSelectedDate(cell.dateKey)}
+                      {...bindDrop(cell.dateKey)}
                     >
                       <strong>{cell.dayNumber}</strong>
                       <span>{summary.requiredCompleted}/{summary.requiredTotal}</span>
@@ -447,7 +481,16 @@ export default function PlannerBoard({ user, token, onRequireLogin, onMetaSaved 
                   onChange={(event) => void toggleEntry(entry.id, event.target.checked)}
                   disabled={isSaving}
                 />
-                <div className="planner-item-copy">
+                <div
+                  className="planner-item-copy planner-item-draggable"
+                  draggable
+                  onDragStart={(event) => {
+                    setDragTaskId(entry.id)
+                    event.dataTransfer.setData('text/planner-task', entry.id)
+                    event.dataTransfer.effectAllowed = 'move'
+                  }}
+                  onDragEnd={() => setDragTaskId(null)}
+                >
                   <strong>{entry.title}</strong>
                   <span>{entry.repeat === 'daily' ? `Daily at ${entry.time}` : `${formatPlannerDate(entry.date)} at ${entry.time}`}</span>
                 </div>

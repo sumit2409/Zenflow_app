@@ -913,8 +913,35 @@ input[type='number']:focus {
   gap: 12px;
 }
 
+.leaderboard-list,
+.break-ideas {
+  display: grid;
+  gap: 12px;
+}
+
 .quest-row {
   padding: 16px;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.leaderboard-row strong,
+.leaderboard-row span,
+.leaderboard-row small {
+  display: block;
+}
+
+.leaderboard-row small {
+  color: var(--ink-soft);
 }
 
 .quest-copy strong,
@@ -1227,6 +1254,31 @@ input[type='date'],
   border-radius: 50%;
   background: radial-gradient(circle, rgba(215, 163, 109, 0.46), rgba(125, 149, 119, 0.06));
   animation: breathe 3.2s ease-in-out infinite;
+}
+
+.pomodoro-cycle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.pomodoro-cycle-grid label,
+.cycle-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.cycle-panel {
+  margin-top: 18px;
+}
+
+.planner-item-draggable {
+  cursor: grab;
+}
+
+.planner-item-draggable:active {
+  cursor: grabbing;
 }
 
 @keyframes breathe {
@@ -2399,7 +2451,8 @@ input[type='date'],
   .planner-time-grid,
   .planner-form,
   .planner-cadence-grid,
-  .theme-grid {
+  .theme-grid,
+  .pomodoro-cycle-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2454,7 +2507,8 @@ input[type='date'],
   .site-footer,
   .onboarding-item,
   .planner-item,
-  .planner-reminder-toggle {
+  .planner-reminder-toggle,
+  .leaderboard-row {
     align-items: flex-start;
     flex-direction: column;
   }

@@ -31,7 +31,8 @@ import { getPlannerEntries, parsePlannerDate } from '../utils/planner'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
 
-type Props = { onSelect: (id: string) => void; user: string | null; token?: string | null }
+type Props = { onSelect: (id: string) => void; onOpenPlannerDate?: (dateKey: string) => void; user: string | null; token?: string | null }
+type LeaderboardEntry = { username: string; fullName: string; points: number }
 
 const features = [
   {
@@ -99,9 +100,10 @@ const chartOptions = {
   },
 }
 
-export default function Dashboard({ onSelect, user, token }: Props) {
+export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: Props) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [meta, setMeta] = useState<ProfileMeta>({})
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [intentionDraft, setIntentionDraft] = useState('')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [isLoading, setIsLoading] = useState(true)
@@ -111,15 +113,17 @@ export default function Dashboard({ onSelect, user, token }: Props) {
       if (!user || !token) {
         setLogs([])
         setMeta({})
+        setLeaderboard([])
         setIsLoading(false)
         return
       }
 
       try {
         setIsLoading(true)
-        const [logsRes, metaRes] = await Promise.all([
+        const [logsRes, metaRes, leaderboardRes] = await Promise.all([
           fetch(apiUrl('/api/logs'), { headers: { authorization: `Bearer ${token}` } }),
           fetch(apiUrl('/api/meta'), { headers: { authorization: `Bearer ${token}` } }),
+          fetch(apiUrl('/api/leaderboard'), { headers: { authorization: `Bearer ${token}` } }),
         ])
 
         if (logsRes.ok) {
@@ -130,6 +134,11 @@ export default function Dashboard({ onSelect, user, token }: Props) {
         if (metaRes.ok) {
           const metaJson = await metaRes.json()
           setMeta(metaJson.meta || {})
+        }
+
+        if (leaderboardRes.ok) {
+          const leaderboardJson = await leaderboardRes.json()
+          setLeaderboard(leaderboardJson.leaderboard || [])
         }
       } catch (error) {
         console.error(error)
@@ -148,7 +157,7 @@ export default function Dashboard({ onSelect, user, token }: Props) {
   const totalPoints = useMemo(() => getTotalPoints(logs), [logs])
   const level = useMemo(() => getLevel(totalPoints), [totalPoints])
   const today = useMemo(() => getTodayTotals(logs), [logs])
-  const todayPoints = Math.round(today.pomodoro * 4 + today.meditation * 5 + today.sudoku * 70 + today.memory * 55 + today.reaction * 55)
+  const todayPoints = Math.round(today.pomodoro * 4 + today.meditation * 5 + today.sudoku * 70 + today.memory * 55 + today.reaction * 55 + today.pomodoro_bonus)
   const streak = useMemo(() => getCurrentStreak(logs), [logs])
   const recentDays = useMemo(() => getRecentActiveDays(logs), [logs])
   const quests = useMemo(() => getQuests(logs), [logs])
@@ -394,6 +403,51 @@ export default function Dashboard({ onSelect, user, token }: Props) {
         <article className="quest-board card fade-rise">
           <div className="section-heading">
             <div>
+              <div className="section-kicker">Leaderboard</div>
+              <h3>Top five performers</h3>
+            </div>
+            <button className="ghost-btn" onClick={() => onSelect('pomodoro')}>Earn more points</button>
+          </div>
+          <div className="leaderboard-list">
+            {leaderboard.length > 0 ? leaderboard.map((entry, index) => (
+              <div key={entry.username} className="leaderboard-row">
+                <strong>#{index + 1}</strong>
+                <div>
+                  <span>@{entry.username}</span>
+                  <small>{entry.fullName}</small>
+                </div>
+                <span>{entry.points} pts</span>
+              </div>
+            )) : (
+              <div className="empty-panel">
+                <h4>No leaderboard data yet</h4>
+                <p>Complete focus sessions, meditation, puzzles, and bonus cycles to appear here.</p>
+              </div>
+            )}
+          </div>
+        </article>
+
+        <article className="reward-card card fade-rise">
+          <div className="section-kicker">Cycle bonus</div>
+          <h3>Longer task streaks earn extra points</h3>
+          <p>Assign a Pomodoro target to a task. When you finish the full session count, the app awards bonus points and marks the task ready to complete.</p>
+          <div className="achievement-list">
+            <div className="achievement-pill unlocked">
+              <strong>Assigned session goal</strong>
+              <span>Each task can require one or more 25-minute focus sessions.</span>
+            </div>
+            <div className="achievement-pill unlocked">
+              <strong>Break before next round</strong>
+              <span>Every completed focus block rolls into a break before the next session starts.</span>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section className="quest-grid">
+        <article className="quest-board card fade-rise">
+          <div className="section-heading">
+            <div>
               <div className="section-kicker">Today&apos;s Tasks</div>
               <h3>Your focus queue</h3>
             </div>
@@ -404,7 +458,11 @@ export default function Dashboard({ onSelect, user, token }: Props) {
               {todaysTasks.slice(0, 5).map((task) => (
                 <div key={task.id} className={`todo-item dashboard ${task.done ? 'done' : ''}`}>
                   <span>{task.text}</span>
-                  <div className="task-meta-chip">{task.done ? 'Done' : `${task.focusCount || 0} focus blocks`}</div>
+                  <div className="task-meta-chip">
+                    {task.done
+                      ? 'Done'
+                      : `${task.completedPomodoros || 0}/${Math.max(1, task.assignedPomodoros || 1)} sessions`}
+                  </div>
                 </div>
               ))}
             </div>
@@ -511,7 +569,9 @@ export default function Dashboard({ onSelect, user, token }: Props) {
                 type="button"
                 className={`heatmap-cell level-${cell.level} ${cell.inMonth ? '' : 'outside'}`}
                 title={`${cell.dateKey}: ${cell.label}`}
-                onClick={() => onSelect('planner')}
+                onClick={() => {
+                  onOpenPlannerDate?.(cell.dateKey)
+                }}
               >
                 <strong>{cell.dayNumber}</strong>
                 <span>{cell.label}</span>

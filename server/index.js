@@ -114,6 +114,19 @@ function buildAccount(user) {
   }
 }
 
+function calculateLogPoints(type, value) {
+  const normalizedType = String(type || '').startsWith('sudoku') ? 'sudoku' : String(type || '')
+  const numericValue = Number(value || 0)
+  if (normalizedType === 'pomodoro') return Math.round(numericValue * 4)
+  if (normalizedType === 'meditation') return Math.round(numericValue * 5)
+  if (normalizedType === 'sudoku') return Math.round(numericValue * 70)
+  if (normalizedType === 'memory') return Math.round(numericValue * 55)
+  if (normalizedType === 'reaction') return Math.round(numericValue * 55)
+  if (normalizedType === 'steps') return Math.round(numericValue / 250)
+  if (normalizedType === 'pomodoro_bonus') return Math.round(numericValue)
+  return 0
+}
+
 function getAttemptKey(req, identifier) {
   return `${req.ip || 'unknown'}:${String(identifier || '').toLowerCase()}`
 }
@@ -432,6 +445,52 @@ app.get('/api/meta', authMiddleware, async (req, res) => {
 
     const meta = await Meta.findOne({ user: req.user }).exec()
     return res.json({ meta: meta ? meta.meta : {} })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/leaderboard', authMiddleware, async (req, res) => {
+  try {
+    if (useFileStorage) {
+      const data = readData()
+      const leaderboard = Object.entries(data.users || {})
+        .map(([username, user]) => {
+          const userLogs = data.logs[username] || {}
+          const points = Object.entries(userLogs).reduce((sum, [, types]) => {
+            if (typeof types === 'number') return sum
+            return sum + Object.entries(types).reduce((logSum, [type, value]) => logSum + calculateLogPoints(type, value), 0)
+          }, 0)
+
+          return {
+            username,
+            fullName: user.fullName || username,
+            points,
+          }
+        })
+        .sort((left, right) => right.points - left.points)
+        .slice(0, 5)
+
+      return res.json({ leaderboard })
+    }
+
+    const [users, logs] = await Promise.all([User.find({}).exec(), Log.find({}).exec()])
+    const pointsByUser = logs.reduce((acc, entry) => {
+      acc[entry.user] = (acc[entry.user] || 0) + calculateLogPoints(entry.type, entry.value)
+      return acc
+    }, {})
+
+    const leaderboard = users
+      .map((user) => ({
+        username: user.username,
+        fullName: user.fullName || user.username,
+        points: Number(pointsByUser[user.username] || 0),
+      }))
+      .sort((left, right) => right.points - left.points)
+      .slice(0, 5)
+
+    return res.json({ leaderboard })
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'server error' })

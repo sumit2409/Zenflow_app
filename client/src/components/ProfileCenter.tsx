@@ -99,7 +99,7 @@ export default function ProfileCenter({ user, token, onRequireLogin, onMetaSaved
   function addTodo() {
     if (!user || !token) return onRequireLogin?.()
     if (!todoText.trim()) return
-    const nextTodos = [...todos, { id: `${Date.now()}`, text: todoText.trim(), done: false }]
+    const nextTodos = [...todos, { id: `${Date.now()}`, text: todoText.trim(), done: false, assignedPomodoros: 1, completedPomodoros: 0, bonusAwarded: false }]
     setTodos(nextTodos)
     setTodoText('')
     void persistMeta({
@@ -219,6 +219,7 @@ export default function ProfileCenter({ user, token, onRequireLogin, onMetaSaved
                   <div>
                     <span>{todo.text}</span>
                     <div className="muted">Focus blocks logged: {todo.focusCount || 0}</div>
+                    <div className="muted">Pomodoro target: {todo.completedPomodoros || 0}/{Math.max(1, todo.assignedPomodoros || 1)}</div>
                   </div>
                   <button className="ghost-btn" onClick={() => removeTodo(todo.id)}>Remove</button>
                 </label>

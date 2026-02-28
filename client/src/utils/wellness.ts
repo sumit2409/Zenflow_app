@@ -40,7 +40,7 @@ export function getTodayTotals(logs: LogEntry[]) {
         acc[normalizedType] = (acc[normalizedType] || 0) + Number(entry.value || 0)
         return acc
       },
-      { pomodoro: 0, meditation: 0, sudoku: 0, memory: 0, reaction: 0, steps: 0 } as Record<string, number>
+      { pomodoro: 0, meditation: 0, sudoku: 0, memory: 0, reaction: 0, steps: 0, pomodoro_bonus: 0 } as Record<string, number>
     )
 }
 
@@ -53,6 +53,7 @@ export function getTotalPoints(logs: LogEntry[]) {
     if (normalizedType === 'memory') return sum + Math.round(entry.value * 55)
     if (normalizedType === 'reaction') return sum + Math.round(entry.value * 55)
     if (normalizedType === 'steps') return sum + Math.round(entry.value / 250)
+    if (normalizedType === 'pomodoro_bonus') return sum + Math.round(entry.value)
     return sum
   }, 0)
 }
@@ -156,7 +157,7 @@ export function getAchievements(logs: LogEntry[]) {
       acc[normalizedType] = (acc[normalizedType] || 0) + Number(entry.value || 0)
       return acc
     },
-    { steps: 0, pomodoro: 0, meditation: 0, sudoku: 0, memory: 0, reaction: 0 } as Record<string, number>
+    { steps: 0, pomodoro: 0, meditation: 0, sudoku: 0, memory: 0, reaction: 0, pomodoro_bonus: 0 } as Record<string, number>
   )
 
   return [

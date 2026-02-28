@@ -6,6 +6,9 @@ export type TodoItem = {
   text: string
   done: boolean
   focusCount?: number
+  assignedPomodoros?: number
+  completedPomodoros?: number
+  bonusAwarded?: boolean
 }
 
 export type ProfileMeta = WellnessMeta & {

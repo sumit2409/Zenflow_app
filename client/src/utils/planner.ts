@@ -174,6 +174,16 @@ export function removePlannerItem(planner: PlannerMeta | undefined, itemId: stri
   }
 }
 
+export function movePlannerItem(planner: PlannerMeta | undefined, itemId: string, nextDate: string): PlannerMeta {
+  return {
+    ...(planner || {}),
+    reminderTimes: getReminderTimes(planner),
+    customItems: (planner?.customItems || []).map((item) => (item.id === itemId ? { ...item, date: nextDate } : item)),
+    completions: { ...(planner?.completions || {}) },
+    remindersEnabled: planner?.remindersEnabled ?? true,
+  }
+}
+
 export async function schedulePlannerNotifications(planner: PlannerMeta | undefined, referenceDate = new Date()) {
   if (Capacitor.getPlatform() === 'web') return
 
