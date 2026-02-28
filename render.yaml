@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: zenflow-api
+    name: zenflow-app
     runtime: node
-    rootDir: server
-    buildCommand: npm install
-    startCommand: npm start
+    rootDir: .
+    buildCommand: npm run render:build
+    startCommand: npm run render:start
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION

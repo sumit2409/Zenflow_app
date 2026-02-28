@@ -57,22 +57,32 @@ cd zenflow_app
 npm run start
 ```
 
-## Render backend deploy
+## Render full app deploy
 
-This repo now includes a Render blueprint at `render.yaml` for the backend service.
+This repo can now be deployed to Render as a single Node web service that serves:
 
-Manual service settings:
+- the website frontend from the same URL
+- the backend API under `/api`
+
+In production, the Express server already serves `client/dist`, so the same Render URL can open the website and handle API requests.
+
+Blueprint settings in `render.yaml`:
 
 - Runtime: `Node`
-- Root Directory: `server`
-- Build Command: `npm install`
-- Start Command: `npm start`
+- Root Directory: `.`
+- Build Command: `npm run render:build`
+- Start Command: `npm run render:start`
 - Health Check Path: `/health`
 
 Required Render environment variables:
 
 - `MONGODB_URI`
 - `ZENFLOW_SECRET`
+
+After redeploy, the same Render URL works for both:
+
+- website: `https://your-render-service.onrender.com`
+- API: `https://your-render-service.onrender.com/api/...`
 
 ## Android app
 
