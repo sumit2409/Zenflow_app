@@ -16,54 +16,54 @@ const goalOptions: Array<{
 }> = [
   {
     id: 'focus',
-    label: 'Focus better',
-    prompt: 'I keep getting distracted and want to lock in.',
-    reply: 'Then we should start with task-linked focus blocks and a lighter dashboard so you can move from intention to output fast.',
-    route: 'Start with Focus Room + task queue + end-of-day proof.',
-    rooms: ['Focus Room', 'Profile Queue', 'Dashboard'],
+    label: 'Improve focus',
+    prompt: 'I want stronger concentration and a cleaner work routine.',
+    reply: 'Start with the focus timer, your task list, and the main dashboard.',
+    route: 'Start with Focus Timer, Tasks, and Dashboard.',
+    rooms: ['Focus Timer', 'Tasks', 'Dashboard'],
     timeline: 'Best first session: 25 minutes',
   },
   {
     id: 'calm',
-    label: 'Feel calmer',
-    prompt: 'My head is noisy and I need to slow down.',
-    reply: 'Then the better path is lower-friction breathing, short rituals, and a quieter first session so the app feels restorative instead of demanding.',
-    route: 'Start with Calm Room + intention + one gentle task.',
-    rooms: ['Calm Room', 'Intention Card', 'Dashboard'],
+    label: 'Reduce stress',
+    prompt: 'I need a short routine that helps me slow down.',
+    reply: 'Start with meditation, a simple daily note, and a short task list.',
+    route: 'Start with Meditation, Daily Note, and Tasks.',
+    rooms: ['Meditation', 'Daily Note', 'Tasks'],
     timeline: 'Best first session: 8 minutes',
   },
   {
     id: 'consistency',
     label: 'Build routine',
-    prompt: 'I start strong but I never stay consistent.',
-    reply: 'Then we optimize for visible streaks, small daily wins, and rewards that make coming back feel earned.',
-    route: 'Start with Dashboard rituals + reward loop + one repeatable habit.',
-    rooms: ['Dashboard', 'Reward Shelf', 'Onboarding'],
+    prompt: 'I want a setup that is easy to repeat every day.',
+    reply: 'Start with the dashboard, streak tracking, and one repeatable daily action.',
+    route: 'Start with Dashboard, Streaks, and One Daily Session.',
+    rooms: ['Dashboard', 'Streaks', 'Session Log'],
     timeline: 'Best first session: 12 minutes',
   },
   {
     id: 'recovery',
-    label: 'Stop doomscrolling',
-    prompt: 'I want breaks that wake me up instead of frying my brain.',
-    reply: 'Then we swap passive scrolling for active resets like Sudoku, reaction training, and short breathing windows.',
-    route: 'Start with Brain Arcade + Sudoku + short reset loop.',
-    rooms: ['Brain Arcade', 'Mind Puzzle', 'Calm Room'],
+    label: 'Use better breaks',
+    prompt: 'I want short breaks that help me reset and refocus.',
+    reply: 'Start with Sudoku, memory training, and a quick meditation break.',
+    route: 'Start with Sudoku, Memory, and Meditation.',
+    rooms: ['Sudoku', 'Memory Game', 'Meditation'],
     timeline: 'Best first session: 10 minutes',
   },
 ]
 
 const faqs = [
   {
-    question: 'What does the concierge actually do?',
-    answer: 'It asks what outcome you want, then recommends the shortest starting path through Zenflow instead of dumping every feature on screen.',
+    question: 'How does the setup help?',
+    answer: 'It suggests the most useful starting tools based on what you want to improve first.',
   },
   {
-    question: 'Do I need to use every room?',
-    answer: 'No. The point of the new flow is to narrow the experience to what matters first, then widen it after the first useful session.',
+    question: 'Do I need every section right away?',
+    answer: 'No. You can start with the tools that match your goal and use the rest later.',
   },
   {
     question: 'Will my progress stay attached to my account?',
-    answer: 'Yes. Your rituals, journal state, and rewards stay tied to your authenticated account session.',
+    answer: 'Yes. Your timers, notes, profile details, and game progress stay with your account.',
   },
 ]
 
@@ -78,36 +78,36 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
     <div className="landing-shell">
       <section className="welcome-stage fade-rise">
         <div className="welcome-copy card">
-          <div className="eyebrow">A calmer start for distracted people</div>
-          <h1>Tell Zenflow what you want, and it will shape the first session around that.</h1>
+          <div className="eyebrow">Get started</div>
+          <h1>Pick a goal and start with the right tools.</h1>
           <p className="lead">
-            The old experience asked users to decipher the product alone. The new one starts with a concierge conversation, a recommended path, and an auth flow that never hides below the viewport.
+            Zenflow combines focus timers, meditation, sudoku, memory training, and account tracking in one mobile app. Start with the path that matches what you need today.
           </p>
           <div className="hero-actions">
-            <button className="primary-cta" onClick={() => onOpenAuth('register', selectedPlan.id)}>Start my recommended setup</button>
+            <button className="primary-cta" onClick={() => onOpenAuth('register', selectedPlan.id)}>Create account</button>
             <button className="ghost-btn" onClick={() => onOpenAuth('login', selectedPlan.id)}>I already have an account</button>
           </div>
           <div className="landing-metrics">
             <div>
-              <strong>1 goal</strong>
-              <span>chosen before account creation</span>
+              <strong>4 tools</strong>
+              <span>focus, meditation, sudoku, and games</span>
             </div>
             <div>
-              <strong>3 rooms</strong>
-              <span>recommended instead of showing all five at once</span>
+              <strong>1 account</strong>
+              <span>stores your profile, notes, and progress</span>
             </div>
             <div>
               <strong>{selectedPlan.timeline}</strong>
-              <span>for the first meaningful win</span>
+              <span>to get through the first session</span>
             </div>
           </div>
         </div>
 
         <aside className="concierge-card card">
-          <div className="section-kicker">Zenflow concierge</div>
+          <div className="section-kicker">Choose a starting point</div>
           <div className="chat-thread" aria-live="polite">
             <div className="chat-bubble bot">
-              What are you trying to change first?
+              What do you want to improve first?
             </div>
             {goalOptions.map((goal) => (
               <button
@@ -135,7 +135,7 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
               ))}
             </div>
             <button className="primary-cta" onClick={() => onOpenAuth('register', selectedPlan.id)}>
-              Build this setup
+              Use this setup
             </button>
           </div>
         </aside>
@@ -158,8 +158,8 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
 
       <section className="faq-grid fade-rise">
         <div>
-          <div className="section-kicker">New onboarding</div>
-          <h2>Instead of feature overload, the app now starts with a short conversation.</h2>
+          <div className="section-kicker">Overview</div>
+          <h2>Start with a clear goal instead of sorting through every feature at once.</h2>
           <div className="faq-list">
             {faqs.map((faq) => (
               <article key={faq.question} className="faq-card card">
@@ -170,13 +170,13 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
           </div>
         </div>
         <aside className="trust-card card">
-          <div className="section-kicker">What changed</div>
-          <h3>Cleaner public UX, stronger auth, better first-run guidance</h3>
+          <div className="section-kicker">Included</div>
+          <h3>Simple setup, clean account flow, and fast access to the main tools</h3>
           <ul className="trust-list">
-            <li>Goal-first entry instead of a generic landing wall</li>
-            <li>Scroll-safe auth sheet for long registration forms</li>
-            <li>Tailored CTA copy based on what the user wants</li>
-            <li>Guided path into focus, calm, routine, or recovery flows</li>
+            <li>Goal-based setup instead of a crowded home screen</li>
+            <li>Account creation and login optimized for mobile</li>
+            <li>Direct access to focus, meditation, sudoku, and games</li>
+            <li>Profile and progress saved to your account</li>
           </ul>
         </aside>
       </section>

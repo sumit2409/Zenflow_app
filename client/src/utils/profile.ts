@@ -17,6 +17,7 @@ export type ProfileMeta = WellnessMeta & {
   todosByDate?: Record<string, TodoItem[]>
   brainArcade?: {
     memoryBestMoves?: number
+    memoryBestSpan?: number
     reactionBestMs?: number
   }
 }

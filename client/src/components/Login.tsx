@@ -34,24 +34,24 @@ const defaultForm: FormState = {
 
 const goalContent: Record<GoalIntent, { title: string; copy: string; checklist: string[] }> = {
   focus: {
-    title: 'Built for deeper focus',
-    copy: 'Your first session will emphasize task-linked focus blocks, a clean queue, and fast visible progress.',
-    checklist: ['Pick one meaningful task', 'Start a 25-minute focus block', 'Leave with proof of work'],
+    title: 'Set up for focus',
+    copy: 'Start with the focus timer, a clear task list, and a simple dashboard.',
+    checklist: ['Pick one task', 'Run a 25-minute session', 'Review progress'],
   },
   calm: {
-    title: 'Built for a calmer head',
-    copy: 'The setup will point you toward slower breathing, lighter copy, and one low-pressure win instead of a hard productivity push.',
-    checklist: ['Write a soft intention', 'Run a short calm ritual', 'Add one gentle task'],
+    title: 'Set up for calm',
+    copy: 'Start with meditation, a short note, and one manageable task.',
+    checklist: ['Write a note', 'Run a short meditation', 'Add one task'],
   },
   consistency: {
-    title: 'Built for consistency',
-    copy: 'The app will emphasize repeatable rituals, visible streaks, and small rewards so returning feels natural.',
-    checklist: ['Choose one daily ritual', 'Finish one starter loop', 'Return tomorrow with less friction'],
+    title: 'Set up for routine',
+    copy: 'Start with repeatable sessions, a visible streak, and a clear dashboard.',
+    checklist: ['Choose a daily session', 'Complete one round', 'Come back tomorrow'],
   },
   recovery: {
-    title: 'Built for active recovery',
-    copy: 'The first path uses brain games, puzzles, and short reset rituals to replace passive scrolling with active recovery.',
-    checklist: ['Play one short brain reset', 'Take one breathing break', 'Return to work with less drift'],
+    title: 'Set up for better breaks',
+    copy: 'Start with sudoku, memory training, and a short meditation break.',
+    checklist: ['Play one game', 'Take one short break', 'Return to work'],
   },
 }
 
@@ -167,22 +167,22 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
     <div className="auth-experience">
       <div className="auth-sheet card">
         <aside className="auth-story">
-          <div className="section-kicker">New first-run experience</div>
-          <h3>{goalPlan ? goalPlan.title : 'A cleaner way into Zenflow'}</h3>
+          <div className="section-kicker">Account access</div>
+          <h3>{goalPlan ? goalPlan.title : 'Sign in to Zenflow'}</h3>
           <p className="muted">
             {goalPlan
               ? goalPlan.copy
-              : 'This onboarding sheet stays scrollable on smaller screens and gives the user a clear next step instead of hiding fields under the fold.'}
+              : 'Use one account to keep your profile, timers, notes, and game progress in sync.'}
           </p>
           <div className="auth-story-panel">
-            <strong>{mode === 'login' ? 'Returning user path' : 'First session path'}</strong>
-            <span>{mode === 'login' ? 'Sign in, restore your rituals, and continue from the dashboard.' : 'Create an account, then enter with a recommended setup path.'}</span>
+            <strong>{mode === 'login' ? 'Existing account' : 'New account'}</strong>
+            <span>{mode === 'login' ? 'Sign in and continue where you left off.' : 'Create an account and start with a recommended setup.'}</span>
           </div>
           <div className="auth-checklist">
             {(goalPlan?.checklist || [
-              'Create a stronger account',
-              'Keep your progress tied to one session',
-              'Enter with a clear first action',
+              'Create your account',
+              'Keep progress tied to your login',
+              'Open the app with a clear next step',
             ]).map((item) => (
               <div key={item} className="auth-check-item">
                 <span className="check-dot" aria-hidden />
@@ -306,12 +306,12 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
                 <span>Keep me signed in on this device</span>
               </label>
               <small className="field-note">
-                {goalPlan ? `Recommended track: ${goalPlan.title}` : 'Protected by stronger validation and session restore.'}
+                {goalPlan ? `Recommended setup: ${goalPlan.title}` : 'Your account keeps your progress available across sessions.'}
               </small>
             </div>
 
             {error && <div className="form-feedback error" role="alert">{error}</div>}
-            {!error && loading && <div className="form-feedback">Securing your workspace...</div>}
+            {!error && loading && <div className="form-feedback">Signing you in...</div>}
 
             <div className="controls">
               <button type="submit" className="primary-cta" disabled={loading}>

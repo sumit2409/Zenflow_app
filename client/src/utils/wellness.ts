@@ -189,10 +189,10 @@ export function getAchievements(logs: LogEntry[]) {
 
 export function getRewardTitle(count: number) {
   const rewards = [
-    'Tea House Glow',
-    'Quiet Garden Pass',
-    'Golden Hour Ribbon',
-    'Moonlight Retreat',
+    'Daily Reward 1',
+    'Daily Reward 2',
+    'Daily Reward 3',
+    'Daily Reward 4',
   ]
   return rewards[count % rewards.length]
 }

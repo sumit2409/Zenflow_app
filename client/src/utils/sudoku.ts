@@ -45,10 +45,72 @@ const puzzlesByDifficulty: Record<SudokuDifficulty, SudokuPuzzle[]> = {
   ],
 }
 
-export function getDailyPuzzle(difficulty: SudokuDifficulty, date = new Date()): SudokuPuzzle {
+function shuffle<T>(items: T[]) {
+  const copy = [...items]
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const nextIndex = Math.floor(Math.random() * (index + 1))
+    ;[copy[index], copy[nextIndex]] = [copy[nextIndex], copy[index]]
+  }
+  return copy
+}
+
+function remapDigits(serialized: string, mapping: Map<string, string>) {
+  return serialized
+    .split('')
+    .map((cell) => (cell === '0' ? '0' : mapping.get(cell) || cell))
+    .join('')
+}
+
+function reorderGroups(serialized: string, lineOrder: number[]) {
+  return lineOrder.map((line) => serialized.slice(line * 9, line * 9 + 9)).join('')
+}
+
+function buildRowOrder() {
+  const bands = shuffle([0, 1, 2])
+  return bands.flatMap((band) => shuffle([0, 1, 2]).map((row) => band * 3 + row))
+}
+
+function reorderRows(serialized: string, rowOrder: number[]) {
+  return reorderGroups(serialized, rowOrder)
+}
+
+function buildColumnOrder() {
+  const stacks = shuffle([0, 1, 2])
+  return stacks.flatMap((stack) => shuffle([0, 1, 2]).map((col) => stack * 3 + col))
+}
+
+function reorderColumns(serialized: string, colOrder: number[]) {
+  const rows = Array.from({ length: 9 }, (_, row) => serialized.slice(row * 9, row * 9 + 9))
+
+  return rows
+    .map((row) => colOrder.map((index) => row[index]).join(''))
+    .join('')
+}
+
+function randomizePuzzle(base: SudokuPuzzle): SudokuPuzzle {
+  const digits = shuffle(['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+  const mapping = new Map<string, string>()
+  const rowOrder = buildRowOrder()
+  const columnOrder = buildColumnOrder()
+
+  digits.forEach((digit, index) => mapping.set(String(index + 1), digit))
+
+  const remappedPuzzle = remapDigits(base.puzzle, mapping)
+  const remappedSolution = remapDigits(base.solution, mapping)
+  const rowAdjustedPuzzle = reorderRows(remappedPuzzle, rowOrder)
+  const rowAdjustedSolution = reorderRows(remappedSolution, rowOrder)
+
+  return {
+    difficulty: base.difficulty,
+    puzzle: reorderColumns(rowAdjustedPuzzle, columnOrder),
+    solution: reorderColumns(rowAdjustedSolution, columnOrder),
+  }
+}
+
+export function getFreshPuzzle(difficulty: SudokuDifficulty): SudokuPuzzle {
   const list = puzzlesByDifficulty[difficulty]
-  const daySeed = Math.floor(date.getTime() / 86400000)
-  return list[daySeed % list.length]
+  const base = list[Math.floor(Math.random() * list.length)]
+  return randomizePuzzle(base)
 }
 
 export function toGrid(serialized: string) {
@@ -71,4 +133,8 @@ export function isSolved(grid: number[][], solution: string) {
   return grid.every((row, rowIndex) =>
     row.every((cell, colIndex) => String(cell) === solution[rowIndex * 9 + colIndex])
   )
+}
+
+export function getSolutionValue(solution: string, row: number, col: number) {
+  return Number(solution[row * 9 + col])
 }

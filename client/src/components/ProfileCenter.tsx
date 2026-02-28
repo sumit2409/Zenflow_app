@@ -118,14 +118,14 @@ export default function ProfileCenter({ user, token, onRequireLogin }: Props) {
   return (
     <div>
       <div className="module-meta">
-        <h2>Profile Room</h2>
-        <p>Keep a practical snapshot of your body, write down the day, and close out your to-dos with visible relief.</p>
-        <div className="session-reward">The more honestly you maintain this room, the easier it becomes to stay intentional.</div>
+        <h2>Account</h2>
+        <p>Manage your profile details, daily notes, and current tasks from one screen.</p>
+        <div className="session-reward">Your account keeps this information available the next time you sign in.</div>
       </div>
 
       <div className="profile-layout">
         <section className="profile-card card inset-card">
-          <div className="section-kicker">Profile</div>
+          <div className="section-kicker">Profile details</div>
           <div className="profile-grid">
             <label>
               Height (cm)
@@ -147,12 +147,12 @@ export default function ProfileCenter({ user, token, onRequireLogin }: Props) {
         </section>
 
         <section className="journal-card card inset-card">
-          <div className="section-kicker">Journal</div>
+          <div className="section-kicker">Daily note</div>
           <textarea
             className="intention-input journal-input"
             value={journal}
             onChange={(event) => setJournal(event.target.value)}
-            placeholder="What shifted today? What drained you? What gave you real energy?"
+            placeholder="Write a short note for today."
           />
           <div className="controls">
             <button onClick={saveJournal}>Save journal</button>
@@ -160,16 +160,16 @@ export default function ProfileCenter({ user, token, onRequireLogin }: Props) {
         </section>
 
         <section className="todo-card card inset-card">
-          <div className="section-kicker">Today&apos;s Tasks</div>
+          <div className="section-kicker">Today&apos;s tasks</div>
           <div className="todo-entry">
-            <input value={todoText} onChange={(event) => setTodoText(event.target.value)} placeholder="Add one task that matters today" />
+            <input value={todoText} onChange={(event) => setTodoText(event.target.value)} placeholder="Add a task for today" />
             <button onClick={addTodo}>Add task</button>
           </div>
           <div className="todo-list">
             {todos.length === 0 ? (
               <div className="empty-panel">
                 <h4>No tasks yet</h4>
-                <p>Add only the work you genuinely want to close today, then tick it off when it is done.</p>
+                <p>Add the tasks you want to finish today and mark them complete as you go.</p>
               </div>
             ) : (
               todos.map((todo) => (

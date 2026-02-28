@@ -35,38 +35,38 @@ type Props = { onSelect: (id: string) => void; user: string | null; token?: stri
 const features = [
   {
     id: 'pomodoro',
-    title: 'Focus Room',
-    desc: 'Deep-work intervals with gentle cues and visible momentum.',
-    sigil: 'FO',
-    reward: '+80 ritual points',
+    title: 'Focus Timer',
+    desc: 'Work in timed sessions and keep a record of completed blocks.',
+    sigil: 'FT',
+    reward: '+80 points',
   },
   {
     id: 'meditation',
-    title: 'Calm Room',
-    desc: 'Ambient breathing windows that lower pressure and reset attention.',
-    sigil: 'CA',
-    reward: '+60 ritual points',
+    title: 'Meditation',
+    desc: 'Run a guided breathing timer for short reset sessions.',
+    sigil: 'MD',
+    reward: '+60 points',
   },
   {
     id: 'sudoku',
-    title: 'Mind Puzzle Room',
-    desc: 'Daily Sudoku to sharpen concentration and interrupt passive scrolling habits.',
-    sigil: 'IQ',
-    reward: '+70 ritual points',
+    title: 'Sudoku',
+    desc: 'Play a fresh puzzle and track completed games.',
+    sigil: 'SD',
+    reward: '+70 points',
   },
   {
     id: 'profile',
-    title: 'Profile and Journal',
-    desc: 'Store your body profile, journal the day, and tick off the tasks that matter.',
-    sigil: 'PR',
-    reward: 'Reflection and planning',
+    title: 'Account and Notes',
+    desc: 'Store profile details, daily notes, and your current task list.',
+    sigil: 'AC',
+    reward: 'Saved account data',
   },
   {
     id: 'arcade',
-    title: 'Brain Arcade',
-    desc: 'Short memory and reaction games that wake your attention back up.',
-    sigil: 'AR',
-    reward: '+55 ritual points',
+    title: 'Games',
+    desc: 'Run a short memory or reaction drill during a break.',
+    sigil: 'GM',
+    reward: '+55 points',
   },
 ]
 
@@ -202,30 +202,30 @@ export default function Dashboard({ onSelect, user, token }: Props) {
       <section className="overview-grid">
         <article className="sanctuary-story card fade-rise">
           <div className="section-kicker">Sanctuary</div>
-          <h2>{user ? `Welcome back, ${user}.` : 'A softer rhythm for ambitious days.'}</h2>
+          <h2>{user ? `Welcome back, ${user}.` : 'Track your day in one place.'}</h2>
           <p>
-            Zenflow now rewards consistency with calm. Build focus, breath, and movement without turning your day into a scoreboard.
+            Use the dashboard to review sessions, daily notes, tasks, and game progress.
           </p>
           <div className="story-ribbon">
-            <span>Quiet points</span>
-            <span>Gentle streaks</span>
-            <span>Unlockable rituals</span>
+            <span>Progress points</span>
+            <span>Streaks</span>
+            <span>Saved sessions</span>
           </div>
         </article>
 
         <article className="level-card card fade-rise">
-          <div className="section-kicker">Sanctuary Points</div>
+          <div className="section-kicker">Progress</div>
           <div className="level-row">
             <div>
               <div className="big-number">{totalPoints}</div>
-              <div className="subtle-line">Level {level.level} resident</div>
+              <div className="subtle-line">Level {level.level}</div>
             </div>
             <div className="reward-badge">{rewardCount} rewards</div>
           </div>
           <div className="progress-rail">
             <span style={{ width: `${level.progress}%` }} />
           </div>
-          <p className="muted">{level.nextLevelIn} points until the next sanctuary tier.</p>
+          <p className="muted">{level.nextLevelIn} points until the next level.</p>
           <div className="mini-stats">
             <div>
               <strong>{todayPoints}</strong>
@@ -243,16 +243,16 @@ export default function Dashboard({ onSelect, user, token }: Props) {
         </article>
 
         <article className="intention-card card fade-rise">
-          <div className="section-kicker">Daily Intention</div>
+          <div className="section-kicker">Daily Note</div>
           <textarea
             className="intention-input"
             value={intentionDraft}
             onChange={(event) => setIntentionDraft(event.target.value)}
-            placeholder="Write a gentle sentence for today: move slowly, focus deeply, leave room to breathe."
+            placeholder="Write one clear note for today."
           />
           <div className="intention-actions">
             <button onClick={saveIntention} disabled={!user || saveState === 'saving'}>
-              {saveState === 'saving' ? 'Saving...' : 'Save intention'}
+              {saveState === 'saving' ? 'Saving...' : 'Save note'}
             </button>
             <span className="muted">{user ? (saveState === 'saved' ? 'Saved.' : 'Stored in your account.') : 'Login to keep this.'}</span>
           </div>
@@ -263,11 +263,11 @@ export default function Dashboard({ onSelect, user, token }: Props) {
         <article className="quest-board card fade-rise">
           <div className="section-heading">
             <div>
-              <div className="section-kicker">Daily Rituals</div>
-              <h3>Three gentle wins for the day</h3>
+              <div className="section-kicker">Daily Targets</div>
+              <h3>Complete the main activities for today</h3>
             </div>
             <button className="ghost-btn" onClick={claimReward} disabled={!rewardReady}>
-              {rewardReady ? `Claim ${getRewardTitle(rewardCount)}` : meta.lastClaimedDate === todayKey() ? 'Reward claimed today' : 'Complete all rituals'}
+              {rewardReady ? `Claim ${getRewardTitle(rewardCount)}` : meta.lastClaimedDate === todayKey() ? 'Reward claimed today' : 'Complete all tasks'}
             </button>
           </div>
           <div className="quest-list">
@@ -295,10 +295,10 @@ export default function Dashboard({ onSelect, user, token }: Props) {
         </article>
 
         <article className="reward-card card fade-rise">
-          <div className="section-kicker">Reward Shelf</div>
-          <h3>{rewardCount > 0 ? getRewardTitle(rewardCount - 1) : 'Your first reward is waiting'}</h3>
+          <div className="section-kicker">Rewards</div>
+          <h3>{rewardCount > 0 ? getRewardTitle(rewardCount - 1) : 'Complete today’s targets to unlock a reward'}</h3>
           <p>
-            Rewards here are symbolic by design: a calmer ritual, a small celebration, and a visual reminder that consistency compounds.
+            Rewards mark completed days and help you see steady progress over time.
           </p>
           <div className="achievement-list">
             {achievements.map((achievement) => (

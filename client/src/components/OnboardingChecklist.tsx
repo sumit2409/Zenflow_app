@@ -11,28 +11,28 @@ type Props = {
 export default function OnboardingChecklist({ meta, logs, onSelect }: Props) {
   const steps = [
     {
-      id: 'intention',
-      title: 'Set today’s intention',
+      id: 'note',
+      title: 'Add today’s note',
       done: Boolean(meta.intention?.trim()),
       action: () => onSelect('profile'),
-      cta: 'Write intention',
-      help: 'A one-line intention makes the rest of the product feel specific.',
+      cta: 'Write note',
+      help: 'A short note helps you set the day before starting a session.',
     },
     {
       id: 'tasks',
-      title: 'Add 1 to 3 real tasks',
+      title: 'Add 1 to 3 tasks',
       done: Boolean((meta.todosByDate && Object.values(meta.todosByDate).some((todos) => todos.length > 0))),
       action: () => onSelect('profile'),
       cta: 'Add tasks',
-      help: 'Tasks are the anchor for focus sessions and visible completion.',
+      help: 'Tasks connect directly to your focus timer and completion tracking.',
     },
     {
       id: 'focus',
-      title: 'Complete your first focus ritual',
+      title: 'Complete your first focus session',
       done: logs.some((entry) => entry.type === 'pomodoro' && entry.value > 0),
       action: () => onSelect('pomodoro'),
-      cta: 'Start focus ritual',
-      help: 'This is the first meaningful action that proves the system is working.',
+      cta: 'Start focus session',
+      help: 'This confirms that your account, timer, and progress tracking are working.',
     },
   ]
 
@@ -44,7 +44,7 @@ export default function OnboardingChecklist({ meta, logs, onSelect }: Props) {
       <div className="section-heading">
         <div>
           <div className="section-kicker">Setup checklist</div>
-          <h3>Finish these 3 steps to unlock the full loop</h3>
+          <h3>Finish these 3 steps to complete your setup</h3>
         </div>
         <div className="task-meta-chip">{completeCount}/3 complete</div>
       </div>
