@@ -11,6 +11,8 @@ import type { AuthAccount, StoredSession } from './types/auth'
 import type { GoalIntent } from './types/experience'
 import { apiUrl } from './utils/api'
 import type { ProfileMeta } from './utils/profile'
+import PlannerBoard from './components/PlannerBoard'
+import { schedulePlannerNotifications } from './utils/planner'
 
 const LOCAL_SESSION_KEY = 'zenflow_session'
 const TEMP_SESSION_KEY = 'zenflow_session_temp'
@@ -63,6 +65,7 @@ export default function App() {
   const [account, setAccount] = useState<AuthAccount | null>(initialSession?.account || null)
   const [token, setToken] = useState<string | null>(initialSession?.token || null)
   const [profileMeta, setProfileMeta] = useState<ProfileMeta>({})
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0)
   const [showLogin, setShowLogin] = useState(false)
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const [goalIntent, setGoalIntent] = useState<GoalIntent | null>(null)
@@ -119,7 +122,12 @@ export default function App() {
     }
 
     void loadProfileMeta()
-  }, [account, token])
+  }, [account, token, profileRefreshKey])
+
+  useEffect(() => {
+    if (!account || !token) return
+    void schedulePlannerNotifications(profileMeta.planner)
+  }, [account, token, profileMeta.planner])
 
   const setView = (view: string | null) => setSelected(view)
 
@@ -133,6 +141,7 @@ export default function App() {
     setAccount(null)
     setToken(null)
     setProfileMeta({})
+    setProfileRefreshKey(0)
     setGoalIntent(null)
     clearStoredSession()
   }
@@ -175,6 +184,7 @@ export default function App() {
           <button className={`nav-link ${selected === 'meditation' ? 'active' : ''}`} onClick={() => setView('meditation')}>Meditation</button>
           <button className={`nav-link ${selected === 'sudoku' ? 'active' : ''}`} onClick={() => setView('sudoku')}>Sudoku</button>
           <button className={`nav-link ${selected === 'arcade' ? 'active' : ''}`} onClick={() => setView('arcade')}>Games</button>
+          <button className={`nav-link ${selected === 'planner' ? 'active' : ''}`} onClick={() => setView('planner')}>Planner</button>
           <button className={`nav-link ${selected === 'profile' ? 'active' : ''}`} onClick={() => setView('profile')}>Account</button>
         </nav>
         <div className="auth">
@@ -275,7 +285,8 @@ export default function App() {
             {selected === 'meditation' && <MeditationTimer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
             {selected === 'sudoku' && <SudokuTrainer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
             {selected === 'arcade' && <BrainArcade user={user} token={token} onRequireLogin={() => openAuth('login')} />}
-            {selected === 'profile' && <ProfileCenter user={user} token={token} onRequireLogin={() => openAuth('login')} />}
+            {selected === 'planner' && <PlannerBoard user={user} token={token} onRequireLogin={() => openAuth('login')} onMetaSaved={() => setProfileRefreshKey((value) => value + 1)} />}
+            {selected === 'profile' && <ProfileCenter user={user} token={token} onRequireLogin={() => openAuth('login')} onMetaSaved={() => setProfileRefreshKey((value) => value + 1)} />}
           </section>
         )}
       </main>

@@ -1,4 +1,5 @@
 import type { WellnessMeta } from './wellness'
+import type { PlannerMeta } from './planner'
 
 export type TodoItem = {
   id: string
@@ -20,4 +21,5 @@ export type ProfileMeta = WellnessMeta & {
     memoryBestSpan?: number
     reactionBestMs?: number
   }
+  planner?: PlannerMeta
 }

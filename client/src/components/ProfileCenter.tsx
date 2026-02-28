@@ -3,9 +3,9 @@ import { todayKey } from '../utils/wellness'
 import { type ProfileMeta, type TodoItem } from '../utils/profile'
 import { apiUrl } from '../utils/api'
 
-type Props = { user: string | null; token?: string | null; onRequireLogin?: () => void }
+type Props = { user: string | null; token?: string | null; onRequireLogin?: () => void; onMetaSaved?: () => void }
 
-export default function ProfileCenter({ user, token, onRequireLogin }: Props) {
+export default function ProfileCenter({ user, token, onRequireLogin, onMetaSaved }: Props) {
   const today = todayKey()
   const [meta, setMeta] = useState<ProfileMeta>({})
   const [profile, setProfile] = useState({ heightCm: '', weightKg: '', dateOfBirth: '' })
@@ -49,6 +49,7 @@ export default function ProfileCenter({ user, token, onRequireLogin }: Props) {
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
         body: JSON.stringify({ meta: partial }),
       })
+      onMetaSaved?.()
       setSaveNote('Saved.')
       window.setTimeout(() => setSaveNote('Your private space is synced.'), 1200)
     } catch (error) {

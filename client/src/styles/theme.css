@@ -1247,7 +1247,8 @@ input[type='date'],
 }
 
 .sudoku-shell,
-.profile-layout {
+.profile-layout,
+.planner-layout {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: 18px;
@@ -1635,8 +1636,98 @@ input[type='date'],
 
 .profile-card,
 .journal-card,
-.todo-card {
+.todo-card,
+.planner-card {
   padding: 18px;
+}
+
+.planner-add-card {
+  grid-column: 1 / -1;
+}
+
+.planner-reminder-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 18px;
+}
+
+.planner-time-grid,
+.planner-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.planner-time-grid label,
+.planner-form label {
+  display: grid;
+  gap: 8px;
+}
+
+.planner-task-list {
+  display: grid;
+  gap: 12px;
+}
+
+.planner-cadence-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.planner-cadence-card {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.planner-cadence-card strong,
+.planner-cadence-card span {
+  display: block;
+}
+
+.planner-cadence-card span,
+.planner-cadence-card p {
+  color: var(--ink-soft);
+}
+
+.planner-cadence-card p {
+  margin: 8px 0 0;
+  line-height: 1.6;
+}
+
+.planner-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.planner-item.required {
+  border-color: rgba(125, 149, 119, 0.24);
+}
+
+.planner-item.done {
+  background: rgba(220, 230, 217, 0.56);
+}
+
+.planner-item-copy strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.planner-item-copy span {
+  color: var(--ink-soft);
+  line-height: 1.5;
 }
 
 .profile-grid {
@@ -1853,6 +1944,7 @@ input[type='date'],
   .sudoku-shell,
   .arcade-layout,
   .profile-layout,
+  .planner-layout,
   .feature-grid,
   .detail-strip,
   .welcome-stage,
@@ -2026,6 +2118,12 @@ input[type='date'],
     grid-template-columns: 1fr;
   }
 
+  .planner-time-grid,
+  .planner-form,
+  .planner-cadence-grid {
+    grid-template-columns: 1fr;
+  }
+
   .auth-grid,
   .password-field {
     grid-template-columns: 1fr;
@@ -2047,7 +2145,9 @@ input[type='date'],
   }
 
   .site-footer,
-  .onboarding-item {
+  .onboarding-item,
+  .planner-item,
+  .planner-reminder-toggle {
     align-items: flex-start;
     flex-direction: column;
   }

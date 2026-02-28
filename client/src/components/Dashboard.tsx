@@ -68,6 +68,13 @@ const features = [
     sigil: 'GM',
     reward: '+55 points',
   },
+  {
+    id: 'planner',
+    title: 'Planner',
+    desc: 'Track required daily items and add timed reminders.',
+    sigil: 'PL',
+    reward: 'Daily reminders',
+  },
 ]
 
 const chartOptions = {
