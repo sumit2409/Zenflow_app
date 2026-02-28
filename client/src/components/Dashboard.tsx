@@ -27,7 +27,7 @@ import {
 import { type ProfileMeta } from '../utils/profile'
 import { apiUrl } from '../utils/api'
 import OnboardingChecklist from './OnboardingChecklist'
-import { getPlannerEntries } from '../utils/planner'
+import { getPlannerEntries, parsePlannerDate } from '../utils/planner'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
 
@@ -248,6 +248,33 @@ export default function Dashboard({ onSelect, user, token }: Props) {
     }
   }, [logs, meta.planner])
 
+  const monthlyHeatmap = useMemo(() => {
+    const anchor = parsePlannerDate(todayKey())
+    const year = anchor.getFullYear()
+    const month = anchor.getMonth()
+    const firstCell = new Date(year, month, 1)
+    const offset = (firstCell.getDay() + 6) % 7
+    firstCell.setDate(firstCell.getDate() - offset)
+
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(firstCell)
+      date.setDate(firstCell.getDate() + index)
+      const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+      const plannerEntries = getPlannerEntries(dateKey, meta.planner)
+      const requiredEntries = plannerEntries.filter((entry) => entry.required)
+      const completedRequired = requiredEntries.filter((entry) => entry.completed).length
+      const ratio = requiredEntries.length === 0 ? 0 : completedRequired / requiredEntries.length
+
+      return {
+        dateKey,
+        dayNumber: date.getDate(),
+        inMonth: date.getMonth() === month,
+        level: ratio === 0 ? 0 : ratio < 0.5 ? 1 : ratio < 1 ? 2 : 3,
+        label: `${completedRequired}/${requiredEntries.length} daily habits complete`,
+      }
+    })
+  }, [meta.planner])
+
   return (
     <div className="dashboard sanctuary-shell">
       {user && <OnboardingChecklist meta={meta} logs={logs} onSelect={onSelect} />}
@@ -348,7 +375,7 @@ export default function Dashboard({ onSelect, user, token }: Props) {
 
         <article className="reward-card card fade-rise">
           <div className="section-kicker">Rewards</div>
-          <h3>{rewardCount > 0 ? getRewardTitle(rewardCount - 1) : 'Complete today’s targets to unlock a reward'}</h3>
+          <h3>{rewardCount > 0 ? getRewardTitle(rewardCount - 1) : "Complete today's targets to unlock a reward"}</h3>
           <p>
             Rewards mark completed days and help you see steady progress over time.
           </p>
@@ -459,6 +486,38 @@ export default function Dashboard({ onSelect, user, token }: Props) {
               <p>Finish one focus block, one breathing session, or beat a brain game to start building your sanctuary history.</p>
             </div>
           )}
+        </article>
+      </section>
+
+      <section className="history-layout">
+        <article className="history-card card fade-rise">
+          <div className="section-heading">
+            <div>
+              <div className="section-kicker">Habit Heatmap</div>
+              <h3>This month at a glance</h3>
+            </div>
+            <button className="ghost-btn" onClick={() => onSelect('planner')}>Open planner</button>
+          </div>
+          <div className="heatmap-legend">
+            <span><i className="heatmap-swatch level-0" /> Missed</span>
+            <span><i className="heatmap-swatch level-1" /> Started</span>
+            <span><i className="heatmap-swatch level-2" /> Nearly done</span>
+            <span><i className="heatmap-swatch level-3" /> Complete</span>
+          </div>
+          <div className="habit-heatmap">
+            {monthlyHeatmap.map((cell) => (
+              <button
+                key={cell.dateKey}
+                type="button"
+                className={`heatmap-cell level-${cell.level} ${cell.inMonth ? '' : 'outside'}`}
+                title={`${cell.dateKey}: ${cell.label}`}
+                onClick={() => onSelect('planner')}
+              >
+                <strong>{cell.dayNumber}</strong>
+                <span>{cell.label}</span>
+              </button>
+            ))}
+          </div>
         </article>
       </section>
 
