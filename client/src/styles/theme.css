@@ -387,51 +387,15 @@ button:disabled {
   margin-top: var(--space-5);
 }
 
-.inline-download-link {
-  color: inherit;
+.public-link {
+  color: #a14e45;
   text-decoration: underline;
-  text-decoration-color: rgba(125, 149, 119, 0.45);
+  text-decoration-color: rgba(161, 78, 69, 0.38);
   text-underline-offset: 3px;
 }
 
-.inline-download-link:hover {
-  text-decoration-color: rgba(174, 131, 89, 0.7);
-}
-
-.android-notice {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-  background: rgba(58, 41, 30, 0.26);
-  backdrop-filter: blur(10px);
-}
-
-.android-notice-card {
-  width: min(420px, 100%);
-  padding: 22px;
-}
-
-.android-notice-card h3 {
-  margin: 0 0 10px;
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 34px;
-  line-height: 1;
-}
-
-.android-notice-card p {
-  margin: 0;
-  color: var(--ink-soft);
-  line-height: 1.7;
-}
-
-.popup-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
+.public-link:hover {
+  text-decoration-color: rgba(161, 78, 69, 0.72);
 }
 
 .primary-cta {
@@ -1308,6 +1272,16 @@ input[type='date'],
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin: 16px 0;
+}
+
+.session-target-editor {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.session-target-editor input {
+  flex: 1;
 }
 
 .pomodoro-cycle-grid label,

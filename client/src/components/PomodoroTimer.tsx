@@ -23,6 +23,8 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
   const [running, setRunning] = useState(false)
   const [todos, setTodos] = useState<TodoItem[]>([])
   const [selectedTaskId, setSelectedTaskId] = useState('')
+  const [sessionTargetDraft, setSessionTargetDraft] = useState('1')
+  const [sessionTargetSaving, setSessionTargetSaving] = useState(false)
   const [todoMap, setTodoMap] = useState<Record<string, TodoItem[]>>({})
   const [statusNote, setStatusNote] = useState('Assign a task, set a session goal, and start the cycle.')
   const timerRef = useRef<number | null>(null)
@@ -58,7 +60,7 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
     }
 
     void loadTasks()
-  }, [user, token, selectedTaskId])
+  }, [user, token])
 
   useEffect(() => {
     phaseRef.current = phase
@@ -179,6 +181,10 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
   const sessionTarget = Math.max(1, selectedTask?.assignedPomodoros || 1)
   const completedSessions = selectedTask?.completedPomodoros || 0
 
+  useEffect(() => {
+    setSessionTargetDraft(String(sessionTarget))
+  }, [sessionTarget, selectedTaskId])
+
   const setWorkPhase = () => {
     setPhase('work')
     setSeconds(WORK_MINUTES * 60)
@@ -195,6 +201,21 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
       setStatusNote('Cycle paused.')
     }
     setRunning((value) => !value)
+  }
+
+  const saveSessionTarget = async () => {
+    if (!selectedTask) return
+    const parsed = Number(sessionTargetDraft)
+    const normalized = Number.isFinite(parsed) ? Math.max(1, Math.round(parsed)) : 1
+    setSessionTargetDraft(String(normalized))
+    if (normalized === sessionTarget) return
+    setSessionTargetSaving(true)
+    try {
+      await updateTaskSessions(selectedTask.id, normalized)
+      setStatusNote(`Assigned session target updated to ${normalized}.`)
+    } finally {
+      setSessionTargetSaving(false)
+    }
   }
 
   return (
@@ -224,12 +245,19 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
               <div className="pomodoro-cycle-grid">
                 <label>
                   Assigned sessions
-                  <input
-                    type="number"
-                    min={1}
-                    value={sessionTarget}
-                    onChange={(event) => void updateTaskSessions(selectedTask.id, Number(event.target.value))}
-                  />
+                  <div className="session-target-editor">
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={sessionTargetDraft}
+                      onChange={(event) => setSessionTargetDraft(event.target.value)}
+                      onBlur={() => void saveSessionTarget()}
+                    />
+                    <button type="button" onClick={() => void saveSessionTarget()} disabled={sessionTargetSaving}>
+                      {sessionTargetSaving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
                 </label>
                 <label>
                   Break minutes

@@ -69,47 +69,20 @@ const faqs = [
 
 export default function MarketingLanding({ onOpenAuth }: Props) {
   const [selectedGoal, setSelectedGoal] = useState<GoalIntent>('focus')
-  const [showAndroidNotice, setShowAndroidNotice] = useState(false)
+  const androidAppUrl = 'https://drive.google.com/file/d/14s05_WnC4ehrNzOCvymjDwjSD4q0EQpM/view?usp=drivesdk'
   const selectedPlan = useMemo(
     () => goalOptions.find((goal) => goal.id === selectedGoal) || goalOptions[0],
     [selectedGoal],
   )
-  const androidDownloadUrl = 'https://drive.google.com/file/d/12EeOX8QlHT2ubYcWiHqgyR_91MU7bIaZ/view?usp=sharing'
-
-  React.useEffect(() => {
-    const popupKey = 'zenflow_android_notice_seen'
-    if (window.localStorage.getItem(popupKey) === '1') return
-    setShowAndroidNotice(true)
-  }, [])
-
-  function dismissAndroidNotice() {
-    window.localStorage.setItem('zenflow_android_notice_seen', '1')
-    setShowAndroidNotice(false)
-  }
 
   return (
     <div className="landing-shell">
-      {showAndroidNotice && (
-        <div className="android-notice">
-          <div className="android-notice-card card">
-            <div className="section-kicker">Android app</div>
-            <h3>Zenflow is also available as an Android pre-release.</h3>
-            <p>Download the Android build now. Google Play availability is coming soon.</p>
-            <div className="controls">
-              <a className="primary-cta inline-download-link popup-link" href={androidDownloadUrl} target="_blank" rel="noreferrer" onClick={dismissAndroidNotice}>
-                Download app
-              </a>
-              <button className="ghost-btn" type="button" onClick={dismissAndroidNotice}>Continue on web</button>
-            </div>
-          </div>
-        </div>
-      )}
       <section className="welcome-stage fade-rise">
         <div className="welcome-copy card">
           <div className="eyebrow">Get started</div>
           <h1>Pick a goal and start with the right tools.</h1>
           <p className="lead">
-            Zenflow combines focus timers, meditation, sudoku, memory training, and account tracking in one mobile app. You can use it on the web or <a className="inline-download-link" href={androidDownloadUrl} target="_blank" rel="noreferrer">download the Android pre-release</a> today, with Google Play availability coming soon.
+            Zenflow combines focus timers, meditation, sudoku, memory training, and account tracking in one place. You can use it on the web, and you can also <a className="public-link" href={androidAppUrl} target="_blank" rel="noreferrer">try and share the Android app</a> while the Google Play release is being prepared.
           </p>
           <div className="hero-actions">
             <button className="primary-cta" onClick={() => onOpenAuth('register', selectedPlan.id)}>Create account</button>
@@ -205,10 +178,10 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
             <li>Account creation and login optimized for mobile</li>
             <li>Direct access to focus, meditation, sudoku, and games</li>
             <li>Profile and progress saved to your account</li>
-            <li>Android pre-release available now, with Google Play release coming soon</li>
+            <li>Android app available for early sharing, with Google Play release coming soon</li>
           </ul>
           <p className="muted">
-            Prefer Android? <a className="inline-download-link" href={androidDownloadUrl} target="_blank" rel="noreferrer">Download the pre-release build here</a>.
+            Prefer Android? <a className="public-link" href={androidAppUrl} target="_blank" rel="noreferrer">Share the Android version here</a>, then move to Google Play once the public release is ready.
           </p>
         </aside>
       </section>
