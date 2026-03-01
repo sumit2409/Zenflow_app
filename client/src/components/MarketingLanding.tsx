@@ -69,14 +69,41 @@ const faqs = [
 
 export default function MarketingLanding({ onOpenAuth }: Props) {
   const [selectedGoal, setSelectedGoal] = useState<GoalIntent>('focus')
+  const [showAndroidNotice, setShowAndroidNotice] = useState(false)
   const selectedPlan = useMemo(
     () => goalOptions.find((goal) => goal.id === selectedGoal) || goalOptions[0],
     [selectedGoal],
   )
   const androidDownloadUrl = 'https://drive.google.com/file/d/12EeOX8QlHT2ubYcWiHqgyR_91MU7bIaZ/view?usp=sharing'
 
+  React.useEffect(() => {
+    const popupKey = 'zenflow_android_notice_seen'
+    if (window.localStorage.getItem(popupKey) === '1') return
+    setShowAndroidNotice(true)
+  }, [])
+
+  function dismissAndroidNotice() {
+    window.localStorage.setItem('zenflow_android_notice_seen', '1')
+    setShowAndroidNotice(false)
+  }
+
   return (
     <div className="landing-shell">
+      {showAndroidNotice && (
+        <div className="android-notice">
+          <div className="android-notice-card card">
+            <div className="section-kicker">Android app</div>
+            <h3>Zenflow is also available as an Android pre-release.</h3>
+            <p>Download the Android build now. Google Play availability is coming soon.</p>
+            <div className="controls">
+              <a className="primary-cta inline-download-link popup-link" href={androidDownloadUrl} target="_blank" rel="noreferrer" onClick={dismissAndroidNotice}>
+                Download app
+              </a>
+              <button className="ghost-btn" type="button" onClick={dismissAndroidNotice}>Continue on web</button>
+            </div>
+          </div>
+        </div>
+      )}
       <section className="welcome-stage fade-rise">
         <div className="welcome-copy card">
           <div className="eyebrow">Get started</div>

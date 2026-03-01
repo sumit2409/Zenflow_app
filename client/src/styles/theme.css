@@ -398,6 +398,39 @@ button:disabled {
   text-decoration-color: rgba(174, 131, 89, 0.7);
 }
 
+.android-notice {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(58, 41, 30, 0.26);
+  backdrop-filter: blur(10px);
+}
+
+.android-notice-card {
+  width: min(420px, 100%);
+  padding: 22px;
+}
+
+.android-notice-card h3 {
+  margin: 0 0 10px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.android-notice-card p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.7;
+}
+
+.popup-link {
+  text-decoration: none;
+}
+
 .primary-cta {
   min-height: 52px;
   width: fit-content;
