@@ -73,6 +73,7 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
     () => goalOptions.find((goal) => goal.id === selectedGoal) || goalOptions[0],
     [selectedGoal],
   )
+  const androidDownloadUrl = 'https://drive.google.com/file/d/12EeOX8QlHT2ubYcWiHqgyR_91MU7bIaZ/view?usp=sharing'
 
   return (
     <div className="landing-shell">
@@ -81,7 +82,7 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
           <div className="eyebrow">Get started</div>
           <h1>Pick a goal and start with the right tools.</h1>
           <p className="lead">
-            Zenflow combines focus timers, meditation, sudoku, memory training, and account tracking in one mobile app. Start with the path that matches what you need today.
+            Zenflow combines focus timers, meditation, sudoku, memory training, and account tracking in one mobile app. You can use it on the web or <a className="inline-download-link" href={androidDownloadUrl} target="_blank" rel="noreferrer">download the Android pre-release</a> today, with Google Play availability coming soon.
           </p>
           <div className="hero-actions">
             <button className="primary-cta" onClick={() => onOpenAuth('register', selectedPlan.id)}>Create account</button>
@@ -177,7 +178,11 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
             <li>Account creation and login optimized for mobile</li>
             <li>Direct access to focus, meditation, sudoku, and games</li>
             <li>Profile and progress saved to your account</li>
+            <li>Android pre-release available now, with Google Play release coming soon</li>
           </ul>
+          <p className="muted">
+            Prefer Android? <a className="inline-download-link" href={androidDownloadUrl} target="_blank" rel="noreferrer">Download the pre-release build here</a>.
+          </p>
         </aside>
       </section>
     </div>

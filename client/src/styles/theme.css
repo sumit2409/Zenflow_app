@@ -387,6 +387,17 @@ button:disabled {
   margin-top: var(--space-5);
 }
 
+.inline-download-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(125, 149, 119, 0.45);
+  text-underline-offset: 3px;
+}
+
+.inline-download-link:hover {
+  text-decoration-color: rgba(174, 131, 89, 0.7);
+}
+
 .primary-cta {
   min-height: 52px;
   width: fit-content;
