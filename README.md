@@ -89,8 +89,12 @@ Optional auth environment variables:
 - `SMTP_USER`
 - `SMTP_PASS`
 - `SMTP_FROM`
+- `SMTP_RESET_BCC`
+- `RESEND_API_KEY`
+- `RESEND_FROM`
 
 If `GOOGLE_CLIENT_ID` is set, the login screen shows Google Sign-In. If the SMTP settings are set, Zenflow can email password reset codes and recovery links.
+If `RESEND_API_KEY` and `RESEND_FROM` are set, password reset emails are sent via Resend API first, with SMTP as fallback.
 
 After redeploy, the same Render URL works for both:
 

@@ -23,6 +23,8 @@ const SMTP_USER = String(process.env.SMTP_USER || '').trim()
 const SMTP_PASS = String(process.env.SMTP_PASS || '').trim()
 const SMTP_FROM = String(process.env.SMTP_FROM || SMTP_USER || '').trim()
 const SMTP_RESET_BCC = String(process.env.SMTP_RESET_BCC || '').trim()
+const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim()
+const RESEND_FROM = String(process.env.RESEND_FROM || SMTP_FROM || '').trim()
 
 const DATA_FILE = path.join(__dirname, 'data.json')
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
@@ -219,46 +221,89 @@ function buildResetEmail({ fullName, code, resetUrl }) {
 }
 
 async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
-  const transporter = await getMailTransporter()
-  if (!transporter) return { delivered: false }
-
   const mail = buildResetEmail({ fullName, code, resetUrl })
-  try {
-    const recipients = Array.isArray(to) ? to : [to]
-    const normalizedRecipients = Array.from(
-      new Set(
-        recipients
-          .map((entry) => String(entry || '').trim())
-          .filter(Boolean)
-          .map((entry) => entry.toLowerCase())
-      )
+  const recipients = Array.isArray(to) ? to : [to]
+  const normalizedRecipients = Array.from(
+    new Set(
+      recipients
+        .map((entry) => String(entry || '').trim())
+        .filter(Boolean)
+        .map((entry) => entry.toLowerCase())
     )
-    if (!normalizedRecipients.length) return { delivered: false }
+  )
+  if (!normalizedRecipients.length) return { delivered: false }
 
-    const sendAttempt = transporter.sendMail({
-      from: SMTP_FROM,
-      to: normalizedRecipients.join(', '),
-      bcc: SMTP_RESET_BCC || undefined,
-      subject: mail.subject,
-      text: mail.text,
-      html: mail.html,
-    })
-    const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('SMTP send timeout after 20s')), 20000)
-    )
-    const result = await Promise.race([sendAttempt, timeout])
-    const acceptedCount = Array.isArray(result?.accepted) ? result.accepted.length : 0
-    const rejectedCount = Array.isArray(result?.rejected) ? result.rejected.length : 0
-    const delivered = acceptedCount > 0
-    console.log(
-      `[smtp] send result delivered=${delivered} accepted=${acceptedCount} rejected=${rejectedCount}`
-    )
+  async function sendViaResend() {
+    if (!RESEND_API_KEY || !RESEND_FROM) return { attempted: false, delivered: false }
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 20000)
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: RESEND_FROM,
+          to: normalizedRecipients,
+          bcc: SMTP_RESET_BCC ? [SMTP_RESET_BCC] : undefined,
+          subject: mail.subject,
+          text: mail.text,
+          html: mail.html,
+        }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
 
-    return { delivered }
-  } catch (error) {
-    console.error('SMTP send failed:', error?.message || error)
-    return { delivered: false }
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`[resend] send failed status=${response.status} body=${errorText}`)
+        return { attempted: true, delivered: false }
+      }
+      console.log(`[resend] send result delivered=true recipients=${normalizedRecipients.length}`)
+      return { attempted: true, delivered: true }
+    } catch (error) {
+      console.error('[resend] send failed:', error?.message || error)
+      return { attempted: true, delivered: false }
+    }
   }
+
+  async function sendViaSmtp() {
+    const transporter = await getMailTransporter()
+    if (!transporter) return { attempted: false, delivered: false }
+    try {
+      const sendAttempt = transporter.sendMail({
+        from: SMTP_FROM,
+        to: normalizedRecipients.join(', '),
+        bcc: SMTP_RESET_BCC || undefined,
+        subject: mail.subject,
+        text: mail.text,
+        html: mail.html,
+      })
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('SMTP send timeout after 20s')), 20000)
+      )
+      const result = await Promise.race([sendAttempt, timeout])
+      const acceptedCount = Array.isArray(result?.accepted) ? result.accepted.length : 0
+      const rejectedCount = Array.isArray(result?.rejected) ? result.rejected.length : 0
+      const delivered = acceptedCount > 0
+      console.log(`[smtp] send result delivered=${delivered} accepted=${acceptedCount} rejected=${rejectedCount}`)
+      return { attempted: true, delivered }
+    } catch (error) {
+      console.error('SMTP send failed:', error?.message || error)
+      return { attempted: true, delivered: false }
+    }
+  }
+
+  const resendResult = await sendViaResend()
+  if (resendResult.delivered) return { delivered: true, provider: 'resend' }
+  const smtpResult = await sendViaSmtp()
+  if (smtpResult.delivered) return { delivered: true, provider: 'smtp' }
+  if (!resendResult.attempted && !smtpResult.attempted) {
+    return { delivered: false, provider: 'none' }
+  }
+  return { delivered: false, provider: resendResult.attempted ? 'resend+smtp' : 'smtp' }
 }
 
 function buildAccount(user) {
@@ -613,7 +658,9 @@ app.post('/api/password/forgot', async (req, res) => {
         code,
         resetUrl,
       })
-      console.log(`[auth] forgot-password result: file-user-found delivery=${delivery.delivered}`)
+      console.log(
+        `[auth] forgot-password result: file-user-found delivery=${delivery.delivered} provider=${delivery.provider || 'unknown'}`
+      )
 
       return res.json({
         ok: true,
@@ -644,7 +691,9 @@ app.post('/api/password/forgot', async (req, res) => {
       code,
       resetUrl,
     })
-    console.log(`[auth] forgot-password result: db-user-found delivery=${delivery.delivered}`)
+    console.log(
+      `[auth] forgot-password result: db-user-found delivery=${delivery.delivered} provider=${delivery.provider || 'unknown'}`
+    )
 
     return res.json({
       ok: true,
@@ -999,6 +1048,7 @@ console.log(
     secure: SMTP_SECURE,
     port: SMTP_PORT,
     publicAppUrlSet: Boolean(PUBLIC_APP_URL),
+    resendConfigured: Boolean(RESEND_API_KEY && RESEND_FROM),
   })
 )
 
