@@ -77,13 +77,20 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
 
   return (
     <div className="landing-shell">
-      <section className="welcome-stage fade-rise">
+      <a className="marketing-skip-link" href="#main-content">Skip to main content</a>
+      <section id="start" className="welcome-stage fade-rise">
         <div className="welcome-copy card">
           <div className="eyebrow">Get started</div>
           <h1>Pick a goal and start with the right tools.</h1>
           <p className="lead">
             Zenflow combines focus timers, meditation, sudoku, memory training, and account tracking in one place. You can use it on the web, and you can also <a className="public-link" href={androidAppUrl} target="_blank" rel="noreferrer">try and share the Android app</a> while the Google Play release is being prepared.
           </p>
+          <nav className="marketing-page-nav" aria-label="Public page sections">
+            <a href="#start">Start here</a>
+            <a href="#plans">Explore plans</a>
+            <a href="#overview">Overview</a>
+            <a href="#about">About us</a>
+          </nav>
           <div className="hero-actions">
             <button className="primary-cta" onClick={() => onOpenAuth('register', selectedPlan.id)}>Create account</button>
             <button className="ghost-btn" onClick={() => onOpenAuth('login', selectedPlan.id)}>I already have an account</button>
@@ -142,7 +149,7 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
         </aside>
       </section>
 
-      <section className="experience-grid fade-rise">
+      <section id="plans" className="experience-grid fade-rise">
         {goalOptions.map((goal) => (
           <article key={goal.id} className={`experience-card card ${goal.id === selectedPlan.id ? 'highlight' : ''}`}>
             <div className="section-kicker">Recommended path</div>
@@ -157,8 +164,8 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
         ))}
       </section>
 
-      <section className="faq-grid fade-rise">
-        <div>
+      <section id="main-content" className="faq-grid fade-rise">
+        <div id="overview">
           <div className="section-kicker">Overview</div>
           <h2>Start with a clear goal instead of sorting through every feature at once.</h2>
           <div className="faq-list">
@@ -186,7 +193,7 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
         </aside>
       </section>
 
-      <section className="about-grid fade-rise">
+      <section id="about" className="about-grid fade-rise">
         <article className="about-card card">
           <div className="section-kicker">About us</div>
           <h2>Built independently to cut through noise and make daily work feel manageable again.</h2>
