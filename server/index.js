@@ -134,6 +134,20 @@ function hashResetCode(code) {
   return crypto.createHash('sha256').update(String(code || '')).digest('hex')
 }
 
+function redactIdentifier(identifier) {
+  const raw = String(identifier || '').trim()
+  if (!raw) return 'empty'
+  const atIndex = raw.indexOf('@')
+  if (atIndex > 0) {
+    const local = raw.slice(0, atIndex)
+    const domain = raw.slice(atIndex + 1)
+    const maskedLocal = local.length <= 2 ? `${local[0] || '*'}*` : `${local.slice(0, 2)}***`
+    return `${maskedLocal}@${domain}`
+  }
+  if (raw.length <= 3) return `${raw[0] || '*'}**`
+  return `${raw.slice(0, 3)}***`
+}
+
 function slugifyUsername(value) {
   const normalized = String(value || '')
     .toLowerCase()
@@ -543,12 +557,14 @@ app.post('/api/password/forgot', async (req, res) => {
   }
 
   const successMessage = 'If that account exists, a password reset code has been prepared.'
+  console.log(`[auth] forgot-password requested for ${redactIdentifier(identifier)}`)
 
   try {
     if (useFileStorage) {
       const data = readData()
       const match = findFileUser(data, identifier)
       if (!match || !match.user.email) {
+        console.log('[auth] forgot-password result: file-user-missing-or-no-email')
         return res.json({ ok: true, message: successMessage })
       }
 
@@ -564,6 +580,7 @@ app.post('/api/password/forgot', async (req, res) => {
         code,
         resetUrl,
       })
+      console.log(`[auth] forgot-password result: file-user-found delivery=${delivery.delivered}`)
 
       return res.json({
         ok: true,
@@ -576,6 +593,7 @@ app.post('/api/password/forgot', async (req, res) => {
 
     const user = await findDbUser(identifier)
     if (!user || !user.email) {
+      console.log('[auth] forgot-password result: db-user-missing-or-no-email')
       return res.json({ ok: true, message: successMessage })
     }
 
@@ -591,6 +609,7 @@ app.post('/api/password/forgot', async (req, res) => {
       code,
       resetUrl,
     })
+    console.log(`[auth] forgot-password result: db-user-found delivery=${delivery.delivered}`)
 
     return res.json({
       ok: true,
@@ -934,6 +953,19 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const DEFAULT_PORT = Number(process.env.PORT || 4100)
+
+console.log(
+  '[startup] SMTP config:',
+  JSON.stringify({
+    hostSet: Boolean(SMTP_HOST),
+    fromSet: Boolean(SMTP_FROM),
+    userSet: Boolean(SMTP_USER),
+    passSet: Boolean(SMTP_PASS),
+    secure: SMTP_SECURE,
+    port: SMTP_PORT,
+    publicAppUrlSet: Boolean(PUBLIC_APP_URL),
+  })
+)
 
 function startServer(port) {
   const server = app.listen(port, () => {
