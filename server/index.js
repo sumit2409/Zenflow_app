@@ -200,15 +200,20 @@ async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
   if (!transporter) return { delivered: false }
 
   const mail = buildResetEmail({ fullName, code, resetUrl })
-  await transporter.sendMail({
-    from: SMTP_FROM,
-    to,
-    subject: mail.subject,
-    text: mail.text,
-    html: mail.html,
-  })
+  try {
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to,
+      subject: mail.subject,
+      text: mail.text,
+      html: mail.html,
+    })
 
-  return { delivered: true }
+    return { delivered: true }
+  } catch (error) {
+    console.error('SMTP send failed:', error?.message || error)
+    return { delivered: false }
+  }
 }
 
 function buildAccount(user) {
