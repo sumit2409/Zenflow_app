@@ -79,6 +79,19 @@ Required Render environment variables:
 - `MONGODB_URI`
 - `ZENFLOW_SECRET`
 
+Optional auth environment variables:
+
+- `GOOGLE_CLIENT_ID`
+- `PUBLIC_APP_URL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
+
+If `GOOGLE_CLIENT_ID` is set, the login screen shows Google Sign-In. If the SMTP settings are set, Zenflow can email password reset codes and recovery links.
+
 After redeploy, the same Render URL works for both:
 
 - website: `https://your-render-service.onrender.com`

@@ -6,17 +6,31 @@ const cors = require('cors')
 const mongoose = require('mongoose')
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
+const nodemailer = require('nodemailer')
+const { OAuth2Client } = require('google-auth-library')
 require('dotenv').config({ path: path.join(__dirname, '.env') })
 
 const JWT_SECRET = process.env.ZENFLOW_SECRET || 'dev-secret'
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/zenflow'
 const isProduction = process.env.NODE_ENV === 'production'
+const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || '').trim()
+const PUBLIC_APP_URL = String(process.env.PUBLIC_APP_URL || '').trim().replace(/\/+$/, '')
+const SMTP_HOST = String(process.env.SMTP_HOST || '').trim()
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587)
+const SMTP_SECURE = String(process.env.SMTP_SECURE || '').trim() === 'true'
+const SMTP_USER = String(process.env.SMTP_USER || '').trim()
+const SMTP_PASS = String(process.env.SMTP_PASS || '').trim()
+const SMTP_FROM = String(process.env.SMTP_FROM || SMTP_USER || '').trim()
 
 const DATA_FILE = path.join(__dirname, 'data.json')
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
 const MAX_LOGIN_ATTEMPTS = 5
 const LOCKOUT_MS = 10 * 60 * 1000
+const PASSWORD_RESET_WINDOW_MS = 15 * 60 * 1000
 const loginAttempts = new Map()
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null
+let mailTransporter = null
 
 let useFileStorage = false
 
@@ -27,6 +41,10 @@ const userSchema = new mongoose.Schema({
   emailLower: { type: String, unique: true, sparse: true },
   fullName: String,
   password: String,
+  googleId: { type: String, unique: true, sparse: true },
+  authProvider: { type: String, default: 'local' },
+  resetPasswordCodeHash: String,
+  resetPasswordExpiresAt: Number,
   created: Number,
   lastLoginAt: Number,
   loginCount: { type: Number, default: 0 },
@@ -50,6 +68,19 @@ function sanitizeFullName(fullName) {
   return String(fullName || '').trim().replace(/\s+/g, ' ')
 }
 
+function validatePassword(password, confirmPassword) {
+  if (String(password || '').length < 8) {
+    return 'password must be at least 8 characters'
+  }
+  if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+    return 'password must include uppercase, lowercase, and a number'
+  }
+  if (confirmPassword !== undefined && password !== confirmPassword) {
+    return 'password confirmation does not match'
+  }
+  return null
+}
+
 function validateRegistration({ username, email, fullName, password, confirmPassword }) {
   const cleanUsername = normalizeUsername(username)
   const cleanEmail = normalizeEmail(email)
@@ -64,15 +95,8 @@ function validateRegistration({ username, email, fullName, password, confirmPass
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
     return { error: 'enter a valid email address', data: null }
   }
-  if (String(password || '').length < 8) {
-    return { error: 'password must be at least 8 characters', data: null }
-  }
-  if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
-    return { error: 'password must include uppercase, lowercase, and a number', data: null }
-  }
-  if (confirmPassword !== undefined && password !== confirmPassword) {
-    return { error: 'password confirmation does not match', data: null }
-  }
+  const passwordError = validatePassword(password, confirmPassword)
+  if (passwordError) return { error: passwordError, data: null }
 
   return {
     error: null,
@@ -102,16 +126,134 @@ function genToken(username) {
   return jwt.sign({ username }, JWT_SECRET, { expiresIn: '7d' })
 }
 
+function createResetCode() {
+  return String(Math.floor(100000 + Math.random() * 900000))
+}
+
+function hashResetCode(code) {
+  return crypto.createHash('sha256').update(String(code || '')).digest('hex')
+}
+
+function slugifyUsername(value) {
+  const normalized = String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+  return normalized || 'zenflow_user'
+}
+
+async function getMailTransporter() {
+  if (mailTransporter) return mailTransporter
+  if (!SMTP_HOST || !SMTP_FROM) return null
+
+  mailTransporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_SECURE,
+    auth: SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+  })
+
+  return mailTransporter
+}
+
+function buildResetUrl(req, identifier, code) {
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim()
+  const protocol = forwardedProto || req.protocol || 'https'
+  const host = req.get('host')
+  const baseUrl = PUBLIC_APP_URL || `${protocol}://${host}`
+  const params = new URLSearchParams({
+    reset: '1',
+    identifier: String(identifier || ''),
+    code: String(code || ''),
+  })
+  return `${baseUrl}/?${params.toString()}`
+}
+
+function buildResetEmail({ fullName, code, resetUrl }) {
+  const safeName = sanitizeFullName(fullName) || 'there'
+  return {
+    subject: 'Zenflow password reset',
+    text: [
+      `Hi ${safeName},`,
+      '',
+      `Use this Zenflow password reset code: ${code}`,
+      '',
+      `You can also open this link to continue: ${resetUrl}`,
+      '',
+      'This code expires in 15 minutes.',
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#2f241e">
+        <p>Hi ${safeName},</p>
+        <p>Use this Zenflow password reset code:</p>
+        <p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p>
+        <p><a href="${resetUrl}">Open Zenflow to reset your password</a></p>
+        <p>This code expires in 15 minutes.</p>
+      </div>
+    `,
+  }
+}
+
+async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
+  const transporter = await getMailTransporter()
+  if (!transporter) return { delivered: false }
+
+  const mail = buildResetEmail({ fullName, code, resetUrl })
+  await transporter.sendMail({
+    from: SMTP_FROM,
+    to,
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html,
+  })
+
+  return { delivered: true }
+}
+
 function buildAccount(user) {
   if (!user) return null
   return {
     username: user.username,
     fullName: user.fullName || user.username,
     email: user.email || '',
+    authProvider: user.authProvider || (user.googleId ? 'google' : 'local'),
     created: user.created || null,
     lastLoginAt: user.lastLoginAt || null,
     loginCount: Number(user.loginCount || 0),
   }
+}
+
+async function generateUniqueDbUsername(seed) {
+  const base = slugifyUsername(seed)
+  let attempt = base
+  let counter = 1
+
+  while (await User.findOne({ usernameLower: attempt.toLowerCase() }).exec()) {
+    counter += 1
+    attempt = `${base}_${counter}`
+  }
+
+  return attempt
+}
+
+function generateUniqueFileUsername(data, seed) {
+  const base = slugifyUsername(seed)
+  let attempt = base
+  let counter = 1
+  const users = data.users || {}
+
+  while (
+    Object.entries(users).some(([username, user]) => {
+      const lowered = String(user.usernameLower || username).toLowerCase()
+      return lowered === attempt.toLowerCase()
+    })
+  ) {
+    counter += 1
+    attempt = `${base}_${counter}`
+  }
+
+  return attempt
 }
 
 function calculateLogPoints(type, value) {
@@ -205,6 +347,18 @@ app.get('/health', (req, res) => {
   })
 })
 
+app.get('/api/auth/config', (req, res) => {
+  res.json({
+    google: {
+      enabled: Boolean(GOOGLE_CLIENT_ID),
+      clientId: GOOGLE_CLIENT_ID || null,
+    },
+    passwordResetEmail: {
+      enabled: Boolean(SMTP_HOST && SMTP_FROM),
+    },
+  })
+})
+
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization
   if (!auth) return res.status(401).json({ error: 'missing auth' })
@@ -266,6 +420,7 @@ app.post('/api/register', async (req, res) => {
         emailLower,
         fullName,
         password: bcrypt.hashSync(password, 10),
+        authProvider: 'local',
         created,
         lastLoginAt: created,
         loginCount: 1,
@@ -292,6 +447,7 @@ app.post('/api/register', async (req, res) => {
       emailLower,
       fullName,
       password: bcrypt.hashSync(password, 10),
+      authProvider: 'local',
       created,
       lastLoginAt: created,
       loginCount: 1,
@@ -328,6 +484,9 @@ app.post('/api/login', async (req, res) => {
         registerFailedAttempt(attemptKey)
         return res.status(401).json({ error: 'invalid credentials' })
       }
+      if (!match.user.password && match.user.googleId) {
+        return res.status(400).json({ error: 'use Google sign-in for this account or reset your password to add an email login' })
+      }
 
       const ok = bcrypt.compareSync(password, match.user.password)
       if (!ok) {
@@ -349,6 +508,9 @@ app.post('/api/login', async (req, res) => {
       registerFailedAttempt(attemptKey)
       return res.status(401).json({ error: 'invalid credentials' })
     }
+    if (!user.password && user.googleId) {
+      return res.status(400).json({ error: 'use Google sign-in for this account or reset your password to add an email login' })
+    }
 
     const ok = bcrypt.compareSync(password, user.password)
     if (!ok) {
@@ -366,6 +528,247 @@ app.post('/api/login', async (req, res) => {
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/password/forgot', async (req, res) => {
+  const identifier = String(req.body?.identifier || '').trim()
+  if (!identifier) {
+    return res.status(400).json({ error: 'email or username is required' })
+  }
+
+  const successMessage = 'If that account exists, a password reset code has been prepared.'
+
+  try {
+    if (useFileStorage) {
+      const data = readData()
+      const match = findFileUser(data, identifier)
+      if (!match || !match.user.email) {
+        return res.json({ ok: true, message: successMessage })
+      }
+
+      const code = createResetCode()
+      match.user.resetPasswordCodeHash = hashResetCode(code)
+      match.user.resetPasswordExpiresAt = Date.now() + PASSWORD_RESET_WINDOW_MS
+      writeData(data)
+
+      const resetUrl = buildResetUrl(req, match.user.email || match.key, code)
+      const delivery = await sendPasswordResetEmail({
+        to: match.user.email,
+        fullName: match.user.fullName || match.key,
+        code,
+        resetUrl,
+      })
+
+      return res.json({
+        ok: true,
+        message: delivery.delivered
+          ? 'Reset instructions were sent to the email on that account.'
+          : successMessage,
+        previewCode: delivery.delivered || isProduction ? undefined : code,
+      })
+    }
+
+    const user = await findDbUser(identifier)
+    if (!user || !user.email) {
+      return res.json({ ok: true, message: successMessage })
+    }
+
+    const code = createResetCode()
+    user.resetPasswordCodeHash = hashResetCode(code)
+    user.resetPasswordExpiresAt = Date.now() + PASSWORD_RESET_WINDOW_MS
+    await user.save()
+
+    const resetUrl = buildResetUrl(req, user.email || user.username, code)
+    const delivery = await sendPasswordResetEmail({
+      to: user.email,
+      fullName: user.fullName || user.username,
+      code,
+      resetUrl,
+    })
+
+    return res.json({
+      ok: true,
+      message: delivery.delivered
+        ? 'Reset instructions were sent to the email on that account.'
+        : successMessage,
+      previewCode: delivery.delivered || isProduction ? undefined : code,
+    })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/password/reset', async (req, res) => {
+  const identifier = String(req.body?.identifier || '').trim()
+  const code = String(req.body?.code || '').trim()
+  const password = String(req.body?.password || '')
+  const confirmPassword = String(req.body?.confirmPassword || '')
+
+  if (!identifier || !code) {
+    return res.status(400).json({ error: 'identifier and reset code are required' })
+  }
+
+  const passwordError = validatePassword(password, confirmPassword)
+  if (passwordError) {
+    return res.status(400).json({ error: passwordError })
+  }
+
+  try {
+    if (useFileStorage) {
+      const data = readData()
+      const match = findFileUser(data, identifier)
+      if (!match || !match.user.resetPasswordCodeHash) {
+        return res.status(400).json({ error: 'invalid or expired reset code' })
+      }
+
+      const codeHash = hashResetCode(code)
+      const expired = Number(match.user.resetPasswordExpiresAt || 0) < Date.now()
+      if (expired || match.user.resetPasswordCodeHash !== codeHash) {
+        return res.status(400).json({ error: 'invalid or expired reset code' })
+      }
+
+      match.user.password = bcrypt.hashSync(password, 10)
+      match.user.authProvider = match.user.googleId ? 'google+local' : 'local'
+      delete match.user.resetPasswordCodeHash
+      delete match.user.resetPasswordExpiresAt
+      writeData(data)
+      return res.json({ ok: true, message: 'Password updated. You can sign in now.' })
+    }
+
+    const user = await findDbUser(identifier)
+    if (!user || !user.resetPasswordCodeHash) {
+      return res.status(400).json({ error: 'invalid or expired reset code' })
+    }
+
+    const codeHash = hashResetCode(code)
+    const expired = Number(user.resetPasswordExpiresAt || 0) < Date.now()
+    if (expired || user.resetPasswordCodeHash !== codeHash) {
+      return res.status(400).json({ error: 'invalid or expired reset code' })
+    }
+
+    user.password = bcrypt.hashSync(password, 10)
+    user.authProvider = user.googleId ? 'google+local' : 'local'
+    user.resetPasswordCodeHash = undefined
+    user.resetPasswordExpiresAt = undefined
+    await user.save()
+
+    return res.json({ ok: true, message: 'Password updated. You can sign in now.' })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/auth/google', async (req, res) => {
+  if (!googleClient) {
+    return res.status(503).json({ error: 'Google sign-in is not configured' })
+  }
+
+  const credential = String(req.body?.credential || '').trim()
+  if (!credential) {
+    return res.status(400).json({ error: 'missing Google credential' })
+  }
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    })
+
+    const payload = ticket.getPayload()
+    const email = normalizeEmail(payload?.email)
+    const emailVerified = Boolean(payload?.email_verified)
+    const googleId = String(payload?.sub || '').trim()
+    const fullName = sanitizeFullName(payload?.name || payload?.given_name || email.split('@')[0])
+
+    if (!email || !emailVerified || !googleId) {
+      return res.status(400).json({ error: 'Google account could not be verified' })
+    }
+
+    if (useFileStorage) {
+      const data = readData()
+      const existingEntry = Object.entries(data.users).find(([username, user]) => {
+        const matchesEmail = String(user.emailLower || user.email || '').toLowerCase() === email
+        const matchesGoogle = String(user.googleId || '') === googleId
+        return matchesEmail || matchesGoogle
+      })
+
+      let username
+      let user
+      if (existingEntry) {
+        username = existingEntry[0]
+        user = existingEntry[1]
+      } else {
+        username = generateUniqueFileUsername(data, email.split('@')[0] || fullName)
+        user = {
+          username,
+          usernameLower: username.toLowerCase(),
+          email,
+          emailLower: email,
+          fullName,
+          password: '',
+          googleId,
+          authProvider: 'google',
+          created: Date.now(),
+          lastLoginAt: Date.now(),
+          loginCount: 0,
+        }
+        data.users[username] = user
+      }
+
+      user.fullName = user.fullName || fullName
+      user.email = email
+      user.emailLower = email
+      user.googleId = googleId
+      user.authProvider = user.password ? 'google+local' : 'google'
+      user.lastLoginAt = Date.now()
+      user.loginCount = Number(user.loginCount || 0) + 1
+      writeData(data)
+
+      const token = genToken(username)
+      return res.json({ username, token, account: buildAccount(user) })
+    }
+
+    let user = await User.findOne({
+      $or: [{ googleId }, { emailLower: email }],
+    }).exec()
+
+    if (!user) {
+      const username = await generateUniqueDbUsername(email.split('@')[0] || fullName)
+      user = new User({
+        username,
+        usernameLower: username.toLowerCase(),
+        email,
+        emailLower: email,
+        fullName,
+        password: '',
+        googleId,
+        authProvider: 'google',
+        created: Date.now(),
+        lastLoginAt: Date.now(),
+        loginCount: 1,
+      })
+      await user.save()
+      const token = genToken(user.username)
+      return res.json({ username: user.username, token, account: buildAccount(user.toObject()) })
+    }
+
+    user.fullName = user.fullName || fullName
+    user.email = email
+    user.emailLower = email
+    user.googleId = googleId
+    user.authProvider = user.password ? 'google+local' : 'google'
+    user.lastLoginAt = Date.now()
+    user.loginCount = Number(user.loginCount || 0) + 1
+    await user.save()
+
+    const token = genToken(user.username)
+    return res.json({ username: user.username, token, account: buildAccount(user.toObject()) })
+  } catch (error) {
+    console.error(error)
+    return res.status(401).json({ error: 'Google sign-in failed' })
   }
 })
 

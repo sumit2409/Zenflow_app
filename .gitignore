@@ -12,6 +12,9 @@ client/android/.gradle/
 client/android/build/
 client/android/app/build/
 client/android/local.properties
+client/android/keystore.properties
+client/android/app/*.jks
+client/android/app/*.keystore
 
 *.log
 npm-debug.log*
