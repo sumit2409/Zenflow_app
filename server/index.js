@@ -190,23 +190,28 @@ function buildResetUrl(req, identifier, code) {
 function buildResetEmail({ fullName, code, resetUrl }) {
   const safeName = sanitizeFullName(fullName) || 'there'
   return {
-    subject: 'Zenflow password reset',
+    subject: `Zenflow reset code: ${code}`,
     text: [
       `Hi ${safeName},`,
       '',
-      `Use this Zenflow password reset code: ${code}`,
+      'You requested a password reset for Zenflow.',
       '',
-      `You can also open this link to continue: ${resetUrl}`,
+      `Reset code: ${code}`,
+      '',
+      `Reset link: ${resetUrl}`,
       '',
       'This code expires in 15 minutes.',
+      'If you did not request this, you can ignore this email.',
     ].join('\n'),
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#2f241e">
         <p>Hi ${safeName},</p>
-        <p>Use this Zenflow password reset code:</p>
+        <p>You requested a password reset for Zenflow.</p>
+        <p>Your reset code is:</p>
         <p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p>
         <p><a href="${resetUrl}">Open Zenflow to reset your password</a></p>
         <p>This code expires in 15 minutes.</p>
+        <p>If you did not request this, you can ignore this email.</p>
       </div>
     `,
   }
