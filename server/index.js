@@ -22,6 +22,7 @@ const SMTP_SECURE = String(process.env.SMTP_SECURE || '').trim() === 'true'
 const SMTP_USER = String(process.env.SMTP_USER || '').trim()
 const SMTP_PASS = String(process.env.SMTP_PASS || '').trim()
 const SMTP_FROM = String(process.env.SMTP_FROM || SMTP_USER || '').trim()
+const SMTP_RESET_BCC = String(process.env.SMTP_RESET_BCC || '').trim()
 
 const DATA_FILE = path.join(__dirname, 'data.json')
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
@@ -223,9 +224,21 @@ async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
 
   const mail = buildResetEmail({ fullName, code, resetUrl })
   try {
+    const recipients = Array.isArray(to) ? to : [to]
+    const normalizedRecipients = Array.from(
+      new Set(
+        recipients
+          .map((entry) => String(entry || '').trim())
+          .filter(Boolean)
+          .map((entry) => entry.toLowerCase())
+      )
+    )
+    if (!normalizedRecipients.length) return { delivered: false }
+
     const sendAttempt = transporter.sendMail({
       from: SMTP_FROM,
-      to,
+      to: normalizedRecipients.join(', '),
+      bcc: SMTP_RESET_BCC || undefined,
       subject: mail.subject,
       text: mail.text,
       html: mail.html,
@@ -233,9 +246,15 @@ async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
     const timeout = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('SMTP send timeout after 20s')), 20000)
     )
-    await Promise.race([sendAttempt, timeout])
+    const result = await Promise.race([sendAttempt, timeout])
+    const acceptedCount = Array.isArray(result?.accepted) ? result.accepted.length : 0
+    const rejectedCount = Array.isArray(result?.rejected) ? result.rejected.length : 0
+    const delivered = acceptedCount > 0
+    console.log(
+      `[smtp] send result delivered=${delivered} accepted=${acceptedCount} rejected=${rejectedCount}`
+    )
 
-    return { delivered: true }
+    return { delivered }
   } catch (error) {
     console.error('SMTP send failed:', error?.message || error)
     return { delivered: false }
@@ -586,8 +605,10 @@ app.post('/api/password/forgot', async (req, res) => {
       writeData(data)
 
       const resetUrl = buildResetUrl(req, match.user.email || match.key, code)
+      const recipientEmails = [match.user.email]
+      if (identifier.includes('@')) recipientEmails.push(identifier)
       const delivery = await sendPasswordResetEmail({
-        to: match.user.email,
+        to: recipientEmails,
         fullName: match.user.fullName || match.key,
         code,
         resetUrl,
@@ -615,8 +636,10 @@ app.post('/api/password/forgot', async (req, res) => {
     await user.save()
 
     const resetUrl = buildResetUrl(req, user.email || user.username, code)
+    const recipientEmails = [user.email]
+    if (identifier.includes('@')) recipientEmails.push(identifier)
     const delivery = await sendPasswordResetEmail({
-      to: user.email,
+      to: recipientEmails,
       fullName: user.fullName || user.username,
       code,
       resetUrl,
