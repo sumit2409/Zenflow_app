@@ -165,6 +165,9 @@ async function getMailTransporter() {
     host: SMTP_HOST,
     port: SMTP_PORT,
     secure: SMTP_SECURE,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
   })
 
@@ -215,13 +218,17 @@ async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
 
   const mail = buildResetEmail({ fullName, code, resetUrl })
   try {
-    await transporter.sendMail({
+    const sendAttempt = transporter.sendMail({
       from: SMTP_FROM,
       to,
       subject: mail.subject,
       text: mail.text,
       html: mail.html,
     })
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('SMTP send timeout after 20s')), 20000)
+    )
+    await Promise.race([sendAttempt, timeout])
 
     return { delivered: true }
   } catch (error) {
