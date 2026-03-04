@@ -185,6 +185,29 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
           </p>
         </aside>
       </section>
+
+      <section className="about-grid fade-rise">
+        <article className="about-card card">
+          <div className="section-kicker">About us</div>
+          <h2>Built independently to cut through noise and make daily work feel manageable again.</h2>
+          <p>
+            Zenflow is developed by independent developers based in India and France. We built it to push back against brain rot, reduce digital drift, and help people manage tasks with more structure.
+          </p>
+          <p>
+            The goal is simple: give people one place to focus, plan, reset, and actually finish what matters.
+          </p>
+        </article>
+        <aside className="about-contact card">
+          <div className="section-kicker">Contact</div>
+          <h3>Questions, suggestions, or support</h3>
+          <p>
+            If you have any doubts about the content, suggestions for the site, or want to support us in some way, send us an email.
+          </p>
+          <p>
+            <a className="public-link" href="mailto:thefadedcosmos@gmail.com">thefadedcosmos@gmail.com</a>
+          </p>
+        </aside>
+      </section>
     </div>
   )
 }

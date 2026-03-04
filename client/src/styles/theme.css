@@ -507,6 +507,23 @@ button:disabled {
   gap: var(--space-5);
 }
 
+.about-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: var(--space-5);
+}
+
+.about-card,
+.about-contact {
+  padding: var(--space-6);
+}
+
+.about-card p,
+.about-contact p {
+  color: var(--ink-soft);
+  line-height: 1.8;
+}
+
 .faq-list,
 .trust-list,
 .onboarding-list {
@@ -1406,6 +1423,21 @@ input[type='date'],
   background: linear-gradient(90deg, #c96d57, #d7a36d, #7d9577);
 }
 
+.auth-help-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.auth-help-card p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
 .auth-row {
   display: flex;
   flex-wrap: wrap;
@@ -1433,6 +1465,66 @@ input[type='date'],
 
 .error-text {
   color: #8a3f35;
+}
+
+.auth-divider-block {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-divider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.auth-divider::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--line);
+}
+
+.auth-divider span {
+  position: relative;
+  z-index: 1;
+  padding: 0 10px;
+  background: rgba(255, 251, 247, 0.96);
+}
+
+.google-signin-slot {
+  display: flex;
+  justify-content: center;
+}
+
+.auth-secondary-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.auth-inline-link {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #8a3f35;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-inline-link:hover {
+  transform: none;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .login-cta {
