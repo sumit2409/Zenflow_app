@@ -71,8 +71,12 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const [goalIntent, setGoalIntent] = useState<GoalIntent | null>(null)
   const [plannerFocusDate, setPlannerFocusDate] = useState(todayKey())
+  const [penguinOffset, setPenguinOffset] = useState({ x: 0, y: 0 })
+  const [penguinHopping, setPenguinHopping] = useState(false)
+  const [penguinKissing, setPenguinKissing] = useState(false)
 
   const user = account?.username || null
+  const guestLandingMode = !account && !selected
 
   useEffect(() => {
     async function validateSession() {
@@ -140,6 +144,34 @@ export default function App() {
     }
   }, [profileMeta.appearance?.theme])
 
+  useEffect(() => {
+    const positions = [
+      { x: 0, y: 0 },
+      { x: -24, y: -8 },
+      { x: 12, y: 10 },
+      { x: -12, y: 16 },
+      { x: 18, y: -4 },
+    ]
+
+    const interval = window.setInterval(() => {
+      const next = positions[Math.floor(Math.random() * positions.length)]
+      setPenguinOffset(next)
+      setPenguinHopping(true)
+      window.setTimeout(() => setPenguinHopping(false), 1500)
+    }, 9000)
+
+    return () => window.clearInterval(interval)
+  }, [])
+
+  function handlePenguinClick() {
+    setPenguinKissing(true)
+    setPenguinHopping(true)
+    window.setTimeout(() => {
+      setPenguinKissing(false)
+      setPenguinHopping(false)
+    }, 1600)
+  }
+
   const setView = (view: string | null) => setSelected(view)
 
   function openPlannerAt(dateKey: string) {
@@ -174,7 +206,18 @@ export default function App() {
 
   return (
     <div className="app-root">
-      <div className="penguin-mascot" aria-hidden="true">
+      <button
+        type="button"
+        className={`penguin-mascot ${penguinHopping ? 'is-hopping' : ''} ${penguinKissing ? 'is-kissing' : ''}`}
+        style={
+          {
+            '--penguin-shift-x': `${penguinOffset.x}px`,
+            '--penguin-shift-y': `${penguinOffset.y}px`,
+          } as React.CSSProperties
+        }
+        onClick={handlePenguinClick}
+        aria-label="Penguin mascot"
+      >
         <div className="penguin-shadow" />
         <div className="penguin-body">
           <div className="penguin-belly" />
@@ -184,9 +227,12 @@ export default function App() {
           <div className="penguin-wing penguin-wing-left" />
           <div className="penguin-wing penguin-wing-right" />
           <div className="penguin-feet" />
+          <div className="penguin-kiss">mwah</div>
+          <div className="penguin-heart penguin-heart-left">❤</div>
+          <div className="penguin-heart penguin-heart-right">❤</div>
         </div>
-      </div>
-      <header className="app-header fade-rise">
+      </button>
+      <header className={`app-header fade-rise ${guestLandingMode ? 'guest-header' : ''}`}>
         <div className="brand-wrap">
           <div className="brand-dot" aria-hidden />
           <div>
@@ -194,16 +240,18 @@ export default function App() {
             <div className="brand-sub">Focus, meditation, sudoku, and quick games</div>
           </div>
         </div>
-        <nav className="nav" aria-label="Main navigation">
-          <button className={`nav-link ${selected === null ? 'active' : ''}`} onClick={() => setView(null)}>Dashboard</button>
-          <button className={`nav-link ${selected === 'pomodoro' ? 'active' : ''}`} onClick={() => setView('pomodoro')}>Focus Timer</button>
-          <button className={`nav-link ${selected === 'meditation' ? 'active' : ''}`} onClick={() => setView('meditation')}>Meditation</button>
-          <button className={`nav-link ${selected === 'sudoku' ? 'active' : ''}`} onClick={() => setView('sudoku')}>Sudoku</button>
-          <button className={`nav-link ${selected === 'arcade' ? 'active' : ''}`} onClick={() => setView('arcade')}>Games</button>
-          <button className={`nav-link ${selected === 'planner' ? 'active' : ''}`} onClick={() => setView('planner')}>Planner</button>
-          <button className={`nav-link ${selected === 'profile' ? 'active' : ''}`} onClick={() => setView('profile')}>Account</button>
-        </nav>
-        <div className="auth">
+        {(account || selected) && (
+          <nav className="nav" aria-label="Main navigation">
+            <button className={`nav-link ${selected === null ? 'active' : ''}`} onClick={() => setView(null)}>Dashboard</button>
+            <button className={`nav-link ${selected === 'pomodoro' ? 'active' : ''}`} onClick={() => setView('pomodoro')}>Focus Timer</button>
+            <button className={`nav-link ${selected === 'meditation' ? 'active' : ''}`} onClick={() => setView('meditation')}>Meditation</button>
+            <button className={`nav-link ${selected === 'sudoku' ? 'active' : ''}`} onClick={() => setView('sudoku')}>Sudoku</button>
+            <button className={`nav-link ${selected === 'arcade' ? 'active' : ''}`} onClick={() => setView('arcade')}>Games</button>
+            <button className={`nav-link ${selected === 'planner' ? 'active' : ''}`} onClick={() => setView('planner')}>Planner</button>
+            <button className={`nav-link ${selected === 'profile' ? 'active' : ''}`} onClick={() => setView('profile')}>Account</button>
+          </nav>
+        )}
+        <div className={`auth ${guestLandingMode ? 'guest-auth' : ''}`}>
           {account ? (
             <>
               <div className="auth-summary account-summary">

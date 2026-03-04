@@ -252,6 +252,20 @@ button:disabled {
   justify-content: flex-end;
 }
 
+.guest-header {
+  align-items: center;
+}
+
+.guest-auth {
+  margin-left: auto;
+}
+
+.guest-auth .login-btn,
+.guest-auth .auth-cta {
+  width: 100%;
+  justify-content: center;
+}
+
 .auth-summary {
   display: grid;
   gap: 2px;
@@ -2497,6 +2511,19 @@ input[type='date'],
     gap: 14px;
   }
 
+  .guest-header {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .guest-auth {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+  }
+
   .nav {
     order: 3;
     width: calc(100% + 4px);
@@ -2523,6 +2550,15 @@ input[type='date'],
     width: 100%;
     justify-content: space-between;
     margin-left: 0;
+  }
+
+  .marketing-page-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: grid;
+  }
+
+  .marketing-page-nav a {
+    justify-content: center;
   }
 
   .overlay {
@@ -2690,7 +2726,13 @@ input[type='date'],
   right: 22px;
   bottom: 22px;
   z-index: 12;
-  pointer-events: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: auto;
+  transform: translate(var(--penguin-shift-x, 0px), var(--penguin-shift-y, 0px));
+  transition: transform 0.7s ease;
 }
 
 .penguin-shadow {
@@ -2702,7 +2744,6 @@ input[type='date'],
   border-radius: 999px;
   background: rgba(47, 36, 30, 0.12);
   filter: blur(4px);
-  animation: penguin-shadow 1.8s ease-in-out infinite;
 }
 
 .penguin-body {
@@ -2711,8 +2752,23 @@ input[type='date'],
   height: 96px;
   border-radius: 46px 46px 38px 38px;
   background: linear-gradient(180deg, #29353c, #151c22);
-  animation: penguin-hop 1.8s ease-in-out infinite;
   box-shadow: 0 16px 34px rgba(47, 36, 30, 0.18);
+}
+
+.penguin-mascot:hover,
+.penguin-mascot:focus-visible {
+  transform: translate(var(--penguin-shift-x, 0px), var(--penguin-shift-y, 0px)) scale(1.03);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.penguin-mascot.is-hopping .penguin-body {
+  animation: penguin-hop 1.4s ease-in-out 1;
+}
+
+.penguin-mascot.is-hopping .penguin-shadow {
+  animation: penguin-shadow 1.4s ease-in-out 1;
 }
 
 .penguin-belly {
@@ -2789,6 +2845,48 @@ input[type='date'],
   background: linear-gradient(90deg, #e6a04b 0 48%, transparent 48% 52%, #e6a04b 52% 100%);
 }
 
+.penguin-kiss {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  opacity: 0;
+  color: #c95c74;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transform: translate(-50%, 8px) scale(0.8);
+}
+
+.penguin-heart {
+  position: absolute;
+  top: 10px;
+  opacity: 0;
+  font-size: 18px;
+  color: #d9647d;
+  transform: translateY(0) scale(0.7);
+}
+
+.penguin-heart-left {
+  left: 12px;
+}
+
+.penguin-heart-right {
+  right: 12px;
+}
+
+.penguin-mascot.is-kissing .penguin-kiss {
+  animation: penguin-kiss-pop 1.2s ease forwards;
+}
+
+.penguin-mascot.is-kissing .penguin-heart-left {
+  animation: penguin-heart-left 1.2s ease forwards;
+}
+
+.penguin-mascot.is-kissing .penguin-heart-right {
+  animation: penguin-heart-right 1.2s ease forwards;
+}
+
 @keyframes penguin-hop {
   0%,
   100% {
@@ -2811,5 +2909,47 @@ input[type='date'],
   40% {
     transform: scaleX(0.84);
     opacity: 0.12;
+  }
+}
+
+@keyframes penguin-kiss-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.7);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -16px) scale(1);
+  }
+}
+
+@keyframes penguin-heart-left {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) translateX(0) scale(0.7);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-26px) translateX(-10px) scale(1.1);
+  }
+}
+
+@keyframes penguin-heart-right {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) translateX(0) scale(0.7);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-28px) translateX(10px) scale(1.1);
   }
 }
