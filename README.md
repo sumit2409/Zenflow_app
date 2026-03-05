@@ -92,6 +92,7 @@ Optional auth environment variables:
 - `SMTP_RESET_BCC`
 - `RESEND_API_KEY`
 - `RESEND_FROM`
+- `APK_DOWNLOAD_URL` (optional direct APK URL used by `/download/android`)
 
 If `GOOGLE_CLIENT_ID` is set, the login screen shows Google Sign-In. If the SMTP settings are set, Zenflow can email password reset codes and recovery links.
 If `RESEND_API_KEY` and `RESEND_FROM` are set, password reset emails are sent via Resend API first, with SMTP as fallback.
@@ -124,10 +125,10 @@ API configuration for Android:
 - web builds keep using relative `/api` calls unless `VITE_API_BASE_URL` is set
 - Android builds default to `http://10.0.2.2:4100` for the emulator when `VITE_API_BASE_URL` is not set
 - set `VITE_ANDROID_API_BASE_URL` before `npm run build:android` if you need a different backend host, such as a LAN IP for a physical device
-- set `VITE_ANDROID_APK_URL` to control the public Android download link shown on the landing page
-  - Safe default (never 404 if releases page exists): `https://github.com/<owner>/<repo>/releases`
-  - GitHub direct download example: `https://github.com/<owner>/<repo>/releases/latest/download/<exact-asset-filename>.apk`
-  - Render-hosted direct download example: `https://<your-render-service>.onrender.com/downloads/zenflow-app.apk`
+- Public Android download link:
+  - The website now links to `/download/android`.
+  - Set `APK_DOWNLOAD_URL` on the server to a direct APK URL (for example GitHub Releases asset URL).
+  - If that direct URL fails or is missing, Zenflow automatically falls back to `https://github.com/sumit2409/Zenflow_app/releases`.
 
 Build a debug APK directly:
 

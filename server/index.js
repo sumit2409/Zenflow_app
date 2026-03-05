@@ -25,6 +25,8 @@ const SMTP_FROM = String(process.env.SMTP_FROM || SMTP_USER || '').trim()
 const SMTP_RESET_BCC = String(process.env.SMTP_RESET_BCC || '').trim()
 const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim()
 const RESEND_FROM = String(process.env.RESEND_FROM || SMTP_FROM || '').trim()
+const DEFAULT_APK_FALLBACK_URL = 'https://github.com/sumit2409/Zenflow_app/releases'
+const APK_DOWNLOAD_URL = String(process.env.APK_DOWNLOAD_URL || '').trim()
 
 const DATA_FILE = path.join(__dirname, 'data.json')
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
@@ -497,6 +499,32 @@ app.get('/health', (req, res) => {
     storage: useFileStorage ? 'file' : 'mongodb',
     mongoReadyState: mongoose.connection.readyState,
   })
+})
+
+app.get('/download/android', async (req, res) => {
+  const targetUrl = APK_DOWNLOAD_URL || DEFAULT_APK_FALLBACK_URL
+  if (!APK_DOWNLOAD_URL) {
+    return res.redirect(302, DEFAULT_APK_FALLBACK_URL)
+  }
+
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    const response = await fetch(targetUrl, {
+      method: 'HEAD',
+      redirect: 'manual',
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+
+    if ([200, 301, 302, 303, 307, 308].includes(response.status)) {
+      return res.redirect(302, targetUrl)
+    }
+  } catch (error) {
+    console.error('Android download URL check failed:', error?.message || error)
+  }
+
+  return res.redirect(302, DEFAULT_APK_FALLBACK_URL)
 })
 
 app.get('/api/auth/config', (req, res) => {
