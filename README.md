@@ -57,6 +57,19 @@ cd zenflow_app
 npm run start
 ```
 
+Send Android release announcement emails to users:
+
+```powershell
+cd zenflow_app
+npm --prefix server run announce:android
+```
+
+Useful flags:
+
+- `--dry-run`
+- `--limit=50`
+- `--only=user@example.com`
+
 ## Render full app deploy
 
 This repo can now be deployed to Render as a single Node web service that serves:

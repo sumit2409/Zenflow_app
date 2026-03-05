@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "node index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "announce:android": "node send_release_announcement.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

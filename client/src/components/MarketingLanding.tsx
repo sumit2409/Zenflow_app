@@ -208,10 +208,15 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
           <div className="section-kicker">Contact</div>
           <h3>Questions, suggestions, or support</h3>
           <p>
-            If you have any doubts about the content, suggestions for the site, or want to support us in some way, send us an email.
+            Thank you for being part of our growing community and supporting us in our fight against brain rot. Feel free to spread the word so more people can use our free resources.
           </p>
           <p>
-            <a className="public-link" href="mailto:thefadedcosmos@gmail.com">thefadedcosmos@gmail.com</a>
+            <a className="public-link" href="mailto:zenflow.bio@zohomail.eu">zenflow.bio@zohomail.eu</a>
+          </p>
+          <p>
+            Have a nice day,
+            <br />
+            Sumit Tiwari
           </p>
         </aside>
       </section>
