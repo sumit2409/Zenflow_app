@@ -560,6 +560,16 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
               <button type="button" className={`auth-tab ${mode === 'login' ? 'active' : ''}`} onClick={() => switchMode('login')}>Login</button>
               <button type="button" className={`auth-tab ${mode === 'register' ? 'active' : ''}`} onClick={() => switchMode('register')}>Register</button>
             </div>
+            {(mode === 'login' || mode === 'register') && (
+              <div className="auth-quick-actions">
+                <button type="button" className="auth-inline-link" onClick={() => switchMode('forgot')}>
+                  Forgot password?
+                </button>
+                <button type="button" className="auth-inline-link" onClick={() => switchMode('verify')}>
+                  Verify account
+                </button>
+              </div>
+            )}
           </div>
 
           <form onSubmit={submit} className="login-form auth-form">
@@ -749,6 +759,16 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
               {mode === 'login' && (
                 <button type="button" className="auth-inline-link" onClick={() => switchMode('forgot')}>
                   Forgot password?
+                </button>
+              )}
+              {mode === 'login' && (
+                <button type="button" className="auth-inline-link" onClick={() => switchMode('verify')}>
+                  Verify account
+                </button>
+              )}
+              {mode === 'register' && (
+                <button type="button" className="auth-inline-link" onClick={() => switchMode('verify')}>
+                  Already have a code? Verify
                 </button>
               )}
               {mode === 'forgot' && (
