@@ -335,7 +335,7 @@ export default function App() {
         openAuth('login', 'focus')
         return
       }
-      setSelected(BREAK_ROOM_ENABLED ? 'breakroom' : lastToolView)
+      setSelected(lastToolView)
       return
     }
     if (section === 'activity') {
@@ -554,6 +554,42 @@ export default function App() {
             <button className="back tool-back-btn" onClick={() => setView(null)}>
               &larr; Back to dashboard
             </button>
+            {isToolSelected && (
+              <div className="tool-switcher" aria-label="Tool switcher">
+                <button
+                  className={`tool-switch-btn ${selected === 'pomodoro' ? 'active' : ''}`}
+                  onClick={() => setView('pomodoro')}
+                >
+                  Focus
+                </button>
+                <button
+                  className={`tool-switch-btn ${selected === 'meditation' ? 'active' : ''}`}
+                  onClick={() => setView('meditation')}
+                >
+                  Meditate
+                </button>
+                <button
+                  className={`tool-switch-btn ${selected === 'sudoku' ? 'active' : ''}`}
+                  onClick={() => setView('sudoku')}
+                >
+                  Sudoku
+                </button>
+                <button
+                  className={`tool-switch-btn ${selected === 'arcade' ? 'active' : ''}`}
+                  onClick={() => setView('arcade')}
+                >
+                  Games
+                </button>
+                {BREAK_ROOM_ENABLED && (
+                  <button
+                    className={`tool-switch-btn ${selected === 'breakroom' ? 'active' : ''}`}
+                    onClick={() => setView('breakroom')}
+                  >
+                    Break Room
+                  </button>
+                )}
+              </div>
+            )}
             {selected === 'pomodoro' && (
               <PomodoroTimer
                 user={user}

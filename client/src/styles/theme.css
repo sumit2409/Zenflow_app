@@ -1358,6 +1358,31 @@ input[type='number']:focus {
   border-color: var(--line);
 }
 
+.tool-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.tool-switch-btn {
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.tool-switch-btn.active {
+  border-color: rgba(125, 149, 119, 0.45);
+  background: rgba(125, 149, 119, 0.18);
+}
+
 .module-meta p {
   margin: 0 0 14px;
   color: var(--ink-soft);
@@ -3358,6 +3383,17 @@ textarea {
 }
 
 @media (max-width: 767px) {
+  .tool-switcher {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .tool-switch-btn {
+    min-height: 38px;
+    padding: 7px 11px;
+    font-size: 12px;
+  }
+
   .penguin-mascot {
     right: 10px;
     bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
