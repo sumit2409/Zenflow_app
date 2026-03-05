@@ -3024,6 +3024,106 @@ textarea {
   transform: none;
 }
 
+.reflection-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(47, 36, 30, 0.45);
+  backdrop-filter: blur(10px);
+  animation: fadeRise 0.3s ease both;
+}
+
+.reflection-card {
+  width: min(480px, 100%);
+  padding: var(--space-5);
+  background: var(--card-strong);
+}
+
+.reflection-card h3 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.breath-guide {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.breath-circle {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle, rgba(125, 149, 119, 0.3), rgba(215, 163, 109, 0.1));
+  transition: transform 0.8s ease, opacity 0.8s ease;
+}
+
+.breath-circle.breath-inhale {
+  transform: scale(1.2);
+  background: radial-gradient(circle, rgba(125, 149, 119, 0.4), rgba(215, 163, 109, 0.15));
+}
+
+.breath-circle.breath-exhale {
+  transform: scale(0.85);
+  opacity: 0.7;
+}
+
+.breath-circle.breath-hold,
+.breath-circle.breath-hold2 {
+  transform: scale(1.1);
+  opacity: 0.9;
+}
+
+.breath-label {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.achievement-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 80px);
+  right: 24px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(125, 149, 119, 0.96), rgba(174, 131, 89, 0.96));
+  color: #fff9f2;
+  box-shadow: 0 16px 40px rgba(47, 36, 30, 0.22);
+  animation: fadeRise 0.4s ease both;
+  pointer-events: none;
+  max-width: 280px;
+}
+
+.achievement-toast strong {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 2px;
+}
+
+.achievement-toast span {
+  font-size: 14px;
+}
+
+.today-score-display {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
 .penguin-mascot {
   position: fixed;
   right: 22px;

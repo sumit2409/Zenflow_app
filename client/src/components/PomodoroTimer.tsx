@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { playPauseChime, playPomodoroCompleteChime, playStartChime } from '../utils/sound'
 import { todayKey } from '../utils/wellness'
 import { type ProfileMeta, type TodoItem } from '../utils/profile'
@@ -10,23 +10,34 @@ function formatTime(totalSeconds: number) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
-type Props = { user: string | null; token?: string | null; onRequireLogin?: () => void; onSelect?: (view: string | null) => void }
+type Props = {
+  user: string | null
+  token?: string | null
+  onRequireLogin?: () => void
+  onSelect?: (view: string | null) => void
+  onSessionComplete?: (minutes: number) => void
+}
 type Phase = 'work' | 'break'
 
-const WORK_MINUTES = 25
+const DURATION_OPTIONS = [25, 50, 90]
 const BONUS_POINTS_PER_TARGET = 120
 
-export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }: Props) {
+export default function PomodoroTimer({ user, token, onRequireLogin, onSelect, onSessionComplete }: Props) {
   const [phase, setPhase] = useState<Phase>('work')
+  const [workMinutes, setWorkMinutes] = useState(DURATION_OPTIONS[0])
   const [breakMinutes, setBreakMinutes] = useState(5)
-  const [seconds, setSeconds] = useState(WORK_MINUTES * 60)
+  const [seconds, setSeconds] = useState(DURATION_OPTIONS[0] * 60)
   const [running, setRunning] = useState(false)
   const [todos, setTodos] = useState<TodoItem[]>([])
   const [selectedTaskId, setSelectedTaskId] = useState('')
   const [sessionTargetDraft, setSessionTargetDraft] = useState('1')
   const [sessionTargetSaving, setSessionTargetSaving] = useState(false)
   const [todoMap, setTodoMap] = useState<Record<string, TodoItem[]>>({})
+  const [sessionNotesMap, setSessionNotesMap] = useState<Record<string, string[]>>({})
   const [statusNote, setStatusNote] = useState('Assign a task, set a session goal, and start the cycle.')
+  const [showReflection, setShowReflection] = useState(false)
+  const [reflectionText, setReflectionText] = useState('')
+
   const timerRef = useRef<number | null>(null)
   const lastTickRef = useRef<number | null>(null)
   const phaseRef = useRef<Phase>('work')
@@ -51,6 +62,7 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
           ...todo,
         }))
         setTodoMap(todoByDate)
+        setSessionNotesMap((meta as ProfileMeta & { sessionNotes?: Record<string, string[]> }).sessionNotes || {})
         setTodos(todayTodos)
         if (todayTodos.length > 0 && !todayTodos.some((todo) => todo.id === selectedTaskId)) {
           setSelectedTaskId(todayTodos.find((todo) => !todo.done)?.id || todayTodos[0].id)
@@ -61,7 +73,7 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
     }
 
     void loadTasks()
-  }, [user, token])
+  }, [user, token, selectedTaskId])
 
   useEffect(() => {
     phaseRef.current = phase
@@ -143,8 +155,44 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
       })
       setStatusNote(`Task cycle complete. Bonus +${BONUS_POINTS_PER_TARGET} points awarded.`)
     } else {
-      setStatusNote('Focus block saved. Break time started.')
+      setStatusNote('Focus block saved. Break starts after reflection.')
     }
+  }
+
+  function startBreak() {
+    setShowReflection(false)
+    setReflectionText('')
+    setPhase('break')
+    setSeconds(Math.max(5, breakMinutes) * 60)
+    setRunning(true)
+    setStatusNote('Break started. Reset before your next session.')
+  }
+
+  async function saveReflection() {
+    if (reflectionText.trim() && user && token) {
+      try {
+        const today = todayKey()
+        const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        const nextSessionNotes = {
+          ...sessionNotesMap,
+          [today]: [...(sessionNotesMap[today] || []), `[${timeLabel}] ${reflectionText.trim()}`],
+        }
+
+        await fetch(apiUrl('/api/meta'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            meta: {
+              sessionNotes: nextSessionNotes,
+            },
+          }),
+        })
+        setSessionNotesMap(nextSessionNotes)
+      } catch (error) {
+        console.error(error)
+      }
+    }
+    startBreak()
   }
 
   useEffect(() => {
@@ -159,31 +207,30 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
           await fetch(apiUrl('/api/logs'), {
             method: 'POST',
             headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-            body: JSON.stringify({ date: todayKey(), type: 'pomodoro', value: WORK_MINUTES }),
+            body: JSON.stringify({ date: todayKey(), type: 'pomodoro', value: workMinutes }),
           })
           if (taskId) {
             await persistTaskProgress(taskId)
           }
+          onSessionComplete?.(workMinutes)
         } else {
           onRequireLogin?.()
         }
 
-        setPhase('break')
-        setSeconds(Math.max(5, breakMinutes) * 60)
-        setRunning(true)
-        setStatusNote('Break started. Walk, stretch, or take a quick reset before the next focus block.')
+        setShowReflection(true)
+        setStatusNote('Session complete. Add a one-line reflection, then your break starts.')
         return
       }
 
       setPhase('work')
-      setSeconds(WORK_MINUTES * 60)
+      setSeconds(workMinutes * 60)
       setRunning(true)
-      setStatusNote('Break finished. The next 25-minute focus session has started.')
+      setStatusNote(`Break finished. The next ${workMinutes}-minute focus session has started.`)
       void playStartChime()
     }
 
     void handlePhaseCompletion()
-  }, [seconds, user, token, onRequireLogin, selectedTaskId, breakMinutes, todos])
+  }, [seconds, user, token, onRequireLogin, selectedTaskId, breakMinutes, todos, workMinutes, onSessionComplete])
 
   const selectedTask = useMemo(
     () => todos.find((todo) => todo.id === selectedTaskId) || null,
@@ -199,7 +246,7 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
 
   const setWorkPhase = () => {
     setPhase('work')
-    setSeconds(WORK_MINUTES * 60)
+    setSeconds(workMinutes * 60)
     setRunning(false)
     setStatusNote('Focus session reset.')
   }
@@ -234,7 +281,7 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
     <div>
       <div className="module-meta">
         <h2>Deep Focus Cycle</h2>
-        <p>Each task can require one or more 25-minute focus sessions. Every work block rolls into a break before the next session begins.</p>
+        <p>Each task can require one or more focus sessions. Every work block rolls into a break before the next session begins.</p>
         <div className="session-reward">Finish all assigned sessions for a task to unlock a bonus score.</div>
       </div>
 
@@ -315,6 +362,26 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
           )}
         </div>
 
+        <div className="controls">
+          {DURATION_OPTIONS.map((mins) => (
+            <button
+              key={mins}
+              type="button"
+              className={`difficulty-chip ${workMinutes === mins ? 'active' : ''}`}
+              disabled={running}
+              onClick={() => {
+                setWorkMinutes(mins)
+                setSeconds(mins * 60)
+                setPhase('work')
+                setRunning(false)
+                setStatusNote(`Session length set to ${mins} minutes.`)
+              }}
+            >
+              {mins} min
+            </button>
+          ))}
+        </div>
+
         <div className="timer-display">{formatTime(Math.max(0, seconds))}</div>
         <p className="muted">{statusNote}</p>
 
@@ -334,12 +401,38 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
               <span>Open the Games room for a fast reset, then come back for the next session.</span>
             </div>
             <div className="controls">
-              <button onClick={() => onSelect?.('arcade')}>Open games</button>
+              <button onClick={() => onSelect?.('breakroom')}>Open break room</button>
               <button onClick={() => onSelect?.('planner')}>Open planner</button>
             </div>
           </div>
         )}
       </div>
+
+      {showReflection && (
+        <div className="reflection-overlay">
+          <div className="reflection-card card">
+            <div className="section-kicker">Session complete</div>
+            <h3>What did you finish?</h3>
+            <p className="muted">One sentence. Then your break starts.</p>
+            <textarea
+              className="intention-input"
+              style={{ minHeight: '80px' }}
+              placeholder="e.g. Finished the auth bug fix, drafted intro paragraph..."
+              value={reflectionText}
+              onChange={(event) => setReflectionText(event.target.value)}
+              autoFocus
+            />
+            <div className="controls">
+              <button className="primary-cta" onClick={() => void saveReflection()}>
+                Save and start break
+              </button>
+              <button className="ghost-btn" onClick={startBreak}>
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

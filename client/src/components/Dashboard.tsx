@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Line } from 'react-chartjs-2'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Line, Bar } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend,
@@ -29,10 +30,10 @@ import { apiUrl } from '../utils/api'
 import OnboardingChecklist from './OnboardingChecklist'
 import { getPlannerEntries, parsePlannerDate } from '../utils/planner'
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend)
 
 type Props = { onSelect: (id: string) => void; onOpenPlannerDate?: (dateKey: string) => void; user: string | null; token?: string | null }
-type LeaderboardEntry = { username: string; fullName: string; points: number }
+type TrendEntry = { username: string; fullName: string; points: number; dailyScores: number[] }
 
 const features = [
   {
@@ -71,6 +72,13 @@ const features = [
     reward: '+55 points',
   },
   {
+    id: 'breakroom',
+    title: 'Break Room',
+    desc: 'Choose your reset activity after a focus block.',
+    sigil: 'BR',
+    reward: 'Recovery routines',
+  },
+  {
     id: 'planner',
     title: 'Planner',
     desc: 'Track required daily items and add timed reminders.',
@@ -100,30 +108,72 @@ const chartOptions = {
   },
 }
 
+function calculateDailyScore(
+  logs: LogEntry[],
+  dateKey: string,
+  plannerMeta: ProfileMeta['planner']
+): number {
+  const totals = logs
+    .filter((entry) => entry.date === dateKey)
+    .reduce((acc, entry) => {
+      const normalizedType = entry.type.startsWith('sudoku') ? 'sudoku' : entry.type
+      acc[normalizedType] = (acc[normalizedType] || 0) + Number(entry.value || 0)
+      return acc
+    }, { pomodoro: 0, meditation: 0, sudoku: 0, memory: 0, reaction: 0 } as Record<string, number>)
+
+  const plannerEntries = getPlannerEntries(dateKey, plannerMeta)
+  const requiredEntries = plannerEntries.filter((entry) => entry.required)
+  const completedRequired = requiredEntries.filter((entry) => entry.completed).length
+  const plannerRatio = requiredEntries.length === 0 ? 0 : completedRequired / requiredEntries.length
+
+  const score =
+    Math.min(totals.pomodoro, 25) +
+    Math.min(totals.meditation, 5) * 4 +
+    Math.min(totals.sudoku, 1) * 15 +
+    Math.min((totals.memory || 0) + (totals.reaction || 0), 1) * 10 +
+    plannerRatio * 30
+
+  return Math.round(Math.min(100, score))
+}
+
+const DAILY_PROMPTS = [
+  'What is the one thing that would make today a success?',
+  'What are you avoiding that you should address today?',
+  'What would you tell your future self about this week?',
+  'What drained your energy recently, and what gave it back?',
+  'What did you learn yesterday that changes how you work today?',
+  'What does a focused, intentional version of today look like?',
+  'What single task deserves your best attention today?',
+]
+
+const CHART_COLORS = ['#bc6c47', '#6b8f71', '#5e7aad', '#a06bb5', '#c9904f']
+
 export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: Props) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [meta, setMeta] = useState<ProfileMeta>({})
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [trends, setTrends] = useState<TrendEntry[]>([])
+  const [trendDateKeys, setTrendDateKeys] = useState<string[]>([])
+  const [newlyUnlocked, setNewlyUnlocked] = useState<string | null>(null)
   const [intentionDraft, setIntentionDraft] = useState('')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [isLoading, setIsLoading] = useState(true)
+  const prevAchievementsRef = useRef<ReturnType<typeof getAchievements>>([])
 
   useEffect(() => {
     async function load() {
       if (!user || !token) {
         setLogs([])
         setMeta({})
-        setLeaderboard([])
         setIsLoading(false)
         return
       }
 
       try {
         setIsLoading(true)
-        const [logsRes, metaRes, leaderboardRes] = await Promise.all([
+        const [logsRes, metaRes, trendsRes] = await Promise.all([
           fetch(apiUrl('/api/logs'), { headers: { authorization: `Bearer ${token}` } }),
           fetch(apiUrl('/api/meta'), { headers: { authorization: `Bearer ${token}` } }),
-          fetch(apiUrl('/api/leaderboard'), { headers: { authorization: `Bearer ${token}` } }),
+          fetch(apiUrl('/api/leaderboard/trends'), { headers: { authorization: `Bearer ${token}` } }),
         ])
 
         if (logsRes.ok) {
@@ -136,9 +186,10 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
           setMeta(metaJson.meta || {})
         }
 
-        if (leaderboardRes.ok) {
-          const leaderboardJson = await leaderboardRes.json()
-          setLeaderboard(leaderboardJson.leaderboard || [])
+        if (trendsRes.ok) {
+          const trendsJson = await trendsRes.json()
+          setTrends(trendsJson.trends || [])
+          setTrendDateKeys(trendsJson.dateKeys || [])
         }
       } catch (error) {
         console.error(error)
@@ -162,10 +213,54 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
   const recentDays = useMemo(() => getRecentActiveDays(logs), [logs])
   const quests = useMemo(() => getQuests(logs), [logs])
   const achievements = useMemo(() => getAchievements(logs), [logs])
+  const todayScore = useMemo(() => calculateDailyScore(logs, todayKey(), meta.planner), [logs, meta.planner])
   const rewardCount = meta.rewardCount || 0
   const rewardReady = Boolean(user && allQuestsComplete(quests) && meta.lastClaimedDate !== todayKey())
   const todaysTasks = meta.todosByDate?.[todayKey()] || []
   const completedTasks = todaysTasks.filter((task) => task.done).length
+  const todayPrompt = useMemo(() => {
+    const start = new Date(new Date().getFullYear(), 0, 0)
+    const diff = Number(new Date()) - Number(start)
+    const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24))
+    return DAILY_PROMPTS[dayOfYear % DAILY_PROMPTS.length]
+  }, [])
+
+  const leaderboardBarData = useMemo(() => ({
+    labels: trends.map((trend) => `@${trend.username}`),
+    datasets: [{
+      label: 'All-time points',
+      data: trends.map((trend) => trend.points),
+      backgroundColor: trends.map((_, index) => `${CHART_COLORS[index % CHART_COLORS.length]}CC`),
+      borderColor: trends.map((_, index) => CHART_COLORS[index % CHART_COLORS.length]),
+      borderWidth: 2,
+      borderRadius: 8,
+    }],
+  }), [trends])
+
+  const leaderboardLineData = useMemo(() => ({
+    labels: trendDateKeys.map((key) => key.slice(5)),
+    datasets: trends.map((trend, index) => ({
+      label: `@${trend.username}`,
+      data: trend.dailyScores,
+      borderColor: CHART_COLORS[index % CHART_COLORS.length],
+      backgroundColor: CHART_COLORS[index % CHART_COLORS.length],
+      borderWidth: 2,
+      pointRadius: 2,
+      tension: 0.3,
+    })),
+  }), [trends, trendDateKeys])
+
+  useEffect(() => {
+    const previousAchievements = prevAchievementsRef.current
+    const justUnlocked = achievements.find(
+      (achievement) => achievement.unlocked && !previousAchievements.find((previous) => previous.id === achievement.id && previous.unlocked)
+    )
+    if (justUnlocked && previousAchievements.length > 0) {
+      setNewlyUnlocked(justUnlocked.title)
+      window.setTimeout(() => setNewlyUnlocked(null), 3500)
+    }
+    prevAchievementsRef.current = achievements
+  }, [achievements])
 
   async function persistMeta(partial: WellnessMeta) {
     setMeta(prev => ({ ...prev, ...partial }))
@@ -313,6 +408,23 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
           <div className="progress-rail">
             <span style={{ width: `${level.progress}%` }} />
           </div>
+          <div className="today-score-display">
+            <span
+              className="today-score-number"
+              style={{
+                fontFamily: "'Cormorant Garamond', serif",
+                fontSize: '52px',
+                lineHeight: 1,
+                color: todayScore >= 80 ? 'var(--sage)' : todayScore >= 50 ? 'var(--amber)' : 'var(--ink-soft)',
+              }}
+            >
+              {todayScore}
+            </span>
+            <span style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>/100 today</span>
+          </div>
+          <div className="progress-rail" style={{ marginTop: '8px' }}>
+            <span style={{ width: `${todayScore}%` }} />
+          </div>
           <p className="muted">{level.nextLevelIn} points until the next level.</p>
           <div className="mini-stats">
             <div>
@@ -332,11 +444,14 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
 
         <article className="intention-card card fade-rise">
           <div className="section-kicker">Daily Note</div>
+          <p className="muted" style={{ fontSize: '13px', fontStyle: 'italic', marginBottom: '10px' }}>
+            {todayPrompt}
+          </p>
           <textarea
             className="intention-input"
             value={intentionDraft}
             onChange={(event) => setIntentionDraft(event.target.value)}
-            placeholder="Write one clear note for today."
+            placeholder="Write your answer here..."
           />
           <div className="intention-actions">
             <button onClick={saveIntention} disabled={!user || saveState === 'saving'}>
@@ -400,31 +515,85 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
       </section>
 
       <section className="quest-grid">
-        <article className="quest-board card fade-rise">
+        <article className="history-card card fade-rise" style={{ gridColumn: '1 / -1' }}>
           <div className="section-heading">
             <div>
-              <div className="section-kicker">Leaderboard</div>
-              <h3>Top five performers</h3>
+              <div className="section-kicker">Top Performers</div>
+              <h3>Daily score trend - last 14 days</h3>
             </div>
-            <button className="ghost-btn" onClick={() => onSelect('pomodoro')}>Earn more points</button>
+            <button className="ghost-btn" onClick={() => onSelect('pomodoro')}>
+              Climb the board
+            </button>
           </div>
-          <div className="leaderboard-list">
-            {leaderboard.length > 0 ? leaderboard.map((entry, index) => (
-              <div key={entry.username} className="leaderboard-row">
-                <strong>#{index + 1}</strong>
-                <div>
-                  <span>@{entry.username}</span>
-                  <small>{entry.fullName}</small>
-                </div>
-                <span>{entry.points} pts</span>
+
+          {trends.length > 0 ? (
+            <div className="history-charts">
+              <div className="chart-block">
+                <div className="chart-label">All-time ranking</div>
+                <Bar
+                  data={leaderboardBarData}
+                  options={{
+                    responsive: true,
+                    indexAxis: 'y' as const,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                      x: {
+                        ticks: { color: '#7d6a58' },
+                        grid: { color: 'rgba(79, 58, 41, 0.08)' },
+                      },
+                      y: {
+                        ticks: { color: '#7d6a58' },
+                        grid: { display: false },
+                      },
+                    },
+                  }}
+                />
               </div>
-            )) : (
-              <div className="empty-panel">
-                <h4>No leaderboard data yet</h4>
-                <p>Complete focus sessions, meditation, puzzles, and bonus cycles to appear here.</p>
+
+              <div className="chart-block">
+                <div className="chart-label">Daily focus score - last 14 days (0-100)</div>
+                <Line
+                  data={leaderboardLineData}
+                  options={{
+                    responsive: true,
+                    plugins: { legend: { display: true, position: 'bottom' as const } },
+                    scales: {
+                      x: {
+                        ticks: { color: '#7d6a58' },
+                        grid: { color: 'rgba(79, 58, 41, 0.08)' },
+                      },
+                      y: {
+                        min: 0,
+                        max: 100,
+                        ticks: { color: '#7d6a58' },
+                        grid: { color: 'rgba(79, 58, 41, 0.08)' },
+                      },
+                    },
+                  }}
+                />
               </div>
-            )}
-          </div>
+
+              <div className="leaderboard-list" style={{ marginTop: '8px' }}>
+                {trends.map((entry, index) => (
+                  <div key={entry.username} className="leaderboard-row">
+                    <strong style={{ color: index === 0 ? '#c98c3f' : 'inherit' }}>
+                      #{index + 1}
+                    </strong>
+                    <div>
+                      <span>@{entry.username}</span>
+                      <small>{entry.fullName}</small>
+                    </div>
+                    <span>{entry.points} pts</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="empty-panel">
+              <h4>No leaderboard data yet</h4>
+              <p>Complete focus sessions, meditation, puzzles, and games to appear here.</p>
+            </div>
+          )}
         </article>
 
         <article className="reward-card card fade-rise">
@@ -594,6 +763,15 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
           </button>
         ))}
       </div>
+      {newlyUnlocked && (
+        <div className="achievement-toast" role="status" aria-live="polite">
+          <span style={{ fontSize: '20px' }}>🏆</span>
+          <div>
+            <strong>Achievement unlocked!</strong>
+            <span>{newlyUnlocked}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

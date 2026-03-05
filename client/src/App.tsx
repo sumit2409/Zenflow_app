@@ -7,6 +7,7 @@ import SudokuTrainer from './components/SudokuTrainer'
 import ProfileCenter from './components/ProfileCenter'
 import BrainArcade from './components/BrainArcade'
 import MarketingLanding from './components/MarketingLanding'
+import BreakRoom from './components/BreakRoom'
 import type { AuthAccount, StoredSession } from './types/auth'
 import type { GoalIntent } from './types/experience'
 import { apiUrl } from './utils/api'
@@ -17,6 +18,7 @@ import { todayKey } from './utils/wellness'
 
 const LOCAL_SESSION_KEY = 'zenflow_session'
 const TEMP_SESSION_KEY = 'zenflow_session_temp'
+const BREAK_ROOM_ENABLED = true
 const isAndroidApp = /ZenflowAndroid/.test(navigator.userAgent)
 
 if (isAndroidApp) {
@@ -68,7 +70,8 @@ function formatDateLabel(value: number | string | null | undefined) {
 export default function App() {
   const initialSession = readStoredSession()
   const [selected, setSelected] = useState<string | null>(null)
-  const [lastToolView, setLastToolView] = useState<'pomodoro' | 'meditation' | 'sudoku' | 'arcade'>('pomodoro')
+  const [lastToolView, setLastToolView] = useState<'pomodoro' | 'meditation' | 'sudoku' | 'arcade' | 'breakroom'>('pomodoro')
+  const [lastSessionMinutes, setLastSessionMinutes] = useState(25)
   const [navSearch, setNavSearch] = useState('')
   const [account, setAccount] = useState<AuthAccount | null>(initialSession?.account || null)
   const [token, setToken] = useState<string | null>(initialSession?.token || null)
@@ -89,7 +92,7 @@ export default function App() {
 
   const user = account?.username || null
   const guestLandingMode = !account && !selected
-  const toolViews = ['pomodoro', 'meditation', 'sudoku', 'arcade'] as const
+  const toolViews = ['pomodoro', 'meditation', 'sudoku', 'arcade', 'breakroom'] as const
   const isToolSelected = Boolean(selected && toolViews.includes(selected as (typeof toolViews)[number]))
   const desktopNavItems: Array<{ id: string | null; label: string }> = [
     { id: null, label: 'Dashboard' },
@@ -97,6 +100,7 @@ export default function App() {
     { id: 'meditation', label: 'Meditation' },
     { id: 'sudoku', label: 'Sudoku' },
     { id: 'arcade', label: 'Games' },
+    ...(BREAK_ROOM_ENABLED ? [{ id: 'breakroom', label: 'Break Room' }] : []),
     { id: 'planner', label: 'Planner' },
     { id: 'profile', label: 'Account' },
   ]
@@ -265,7 +269,7 @@ export default function App() {
   const setView = (view: string | null) => setSelected(view)
 
   useEffect(() => {
-    if (selected === 'pomodoro' || selected === 'meditation' || selected === 'sudoku' || selected === 'arcade') {
+    if (selected === 'pomodoro' || selected === 'meditation' || selected === 'sudoku' || selected === 'arcade' || selected === 'breakroom') {
       setLastToolView(selected)
     }
   }, [selected])
@@ -275,6 +279,7 @@ export default function App() {
     meditation: 'Meditation — Zenflow',
     sudoku: 'Sudoku — Zenflow',
     arcade: 'Games — Zenflow',
+    breakroom: 'Break Room — Zenflow',
     planner: 'Planner — Zenflow',
     profile: 'Account — Zenflow',
   }
@@ -330,7 +335,7 @@ export default function App() {
         openAuth('login', 'focus')
         return
       }
-      setSelected(lastToolView)
+      setSelected(BREAK_ROOM_ENABLED ? 'breakroom' : lastToolView)
       return
     }
     if (section === 'activity') {
@@ -549,10 +554,19 @@ export default function App() {
             <button className="back tool-back-btn" onClick={() => setView(null)}>
               &larr; Back to dashboard
             </button>
-            {selected === 'pomodoro' && <PomodoroTimer user={user} token={token} onRequireLogin={() => openAuth('login')} onSelect={setView} />}
+            {selected === 'pomodoro' && (
+              <PomodoroTimer
+                user={user}
+                token={token}
+                onRequireLogin={() => openAuth('login')}
+                onSelect={setView}
+                onSessionComplete={(mins) => setLastSessionMinutes(mins)}
+              />
+            )}
             {selected === 'meditation' && <MeditationTimer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
             {selected === 'sudoku' && <SudokuTrainer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
             {selected === 'arcade' && <BrainArcade user={user} token={token} onRequireLogin={() => openAuth('login')} />}
+            {selected === 'breakroom' && <BreakRoom onSelect={(id) => setView(id)} lastSessionMinutes={lastSessionMinutes} />}
             {selected === 'planner' && <PlannerBoard initialDate={plannerFocusDate} user={user} token={token} onRequireLogin={() => openAuth('login')} onMetaSaved={() => setProfileRefreshKey((value) => value + 1)} />}
             {selected === 'profile' && <ProfileCenter user={user} token={token} onRequireLogin={() => openAuth('login')} onMetaSaved={() => setProfileRefreshKey((value) => value + 1)} />}
           </section>

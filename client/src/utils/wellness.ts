@@ -163,37 +163,58 @@ export function getAchievements(logs: LogEntry[]) {
   return [
     {
       id: 'lantern',
-      title: 'Lantern Keeper',
+      title: '🕯️ Lantern Keeper',
       detail: 'Log 100 focus minutes.',
       unlocked: totals.pomodoro >= 100,
     },
     {
       id: 'oasis',
-      title: 'Oasis Breath',
+      title: '🌊 Oasis Breath',
       detail: 'Log 30 meditation minutes.',
       unlocked: totals.meditation >= 30,
     },
     {
       id: 'mindsmith',
-      title: 'Mindsmith',
+      title: '⚙️ Mindsmith',
       detail: 'Solve 5 Sudoku puzzles.',
       unlocked: totals.sudoku >= 5,
     },
     {
       id: 'spark',
-      title: 'Synapse Spark',
+      title: '⚡ Synapse Spark',
       detail: 'Complete 10 brain arcade rounds.',
       unlocked: totals.memory + totals.reaction >= 10,
+    },
+    {
+      id: 'streak7',
+      title: '🔥 Week Warrior',
+      detail: 'Log activity 7 days in a row.',
+      unlocked: (() => {
+        const activeDays = new Set(logs.filter((entry) => entry.value > 0).map((entry) => entry.date))
+        let streak = 0
+        const cursor = new Date()
+        for (let index = 0; index < 7; index += 1) {
+          const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
+          if (!activeDays.has(key)) break
+          streak += 1
+          cursor.setDate(cursor.getDate() - 1)
+        }
+        return streak >= 7
+      })(),
     },
   ]
 }
 
 export function getRewardTitle(count: number) {
   const rewards = [
-    'Daily Reward 1',
-    'Daily Reward 2',
-    'Daily Reward 3',
-    'Daily Reward 4',
+    'First Flame 🕯️',
+    'Steady Mind 🌿',
+    'Flow State 🌊',
+    'Deep Roots 🌳',
+    'Clarity Keeper 🔮',
+    'Iron Focus 🏔️',
+    'Rhythm Master 🎯',
+    'Zenflow Sage 🌟',
   ]
   return rewards[count % rewards.length]
 }

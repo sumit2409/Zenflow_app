@@ -1433,6 +1433,70 @@ app.get('/api/leaderboard', authMiddleware, async (req, res) => {
   }
 })
 
+app.get('/api/leaderboard/trends', authMiddleware, async (req, res) => {
+  try {
+    const dateKeys = Array.from({ length: 14 }, (_, index) => {
+      const date = new Date()
+      date.setHours(0, 0, 0, 0)
+      date.setDate(date.getDate() - (13 - index))
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    })
+
+    if (useFileStorage) {
+      return res.json({ trends: [], dateKeys })
+    }
+
+    const [users, logs] = await Promise.all([
+      User.find({}).exec(),
+      Log.find({ date: { $in: dateKeys } }).exec(),
+    ])
+
+    const allLogs = await Log.find({}).exec()
+    const allTimePoints = allLogs.reduce((acc, entry) => {
+      acc[entry.user] = (acc[entry.user] || 0) + calculateLogPoints(entry.type, entry.value)
+      return acc
+    }, {})
+
+    const top5Users = users
+      .map((user) => ({ username: user.username, fullName: user.fullName || user.username, points: Number(allTimePoints[user.username] || 0) }))
+      .sort((left, right) => right.points - left.points)
+      .slice(0, 5)
+
+    const trends = top5Users.map((user) => {
+      const userLogs = logs.filter((entry) => entry.user === user.username)
+
+      const dailyScores = dateKeys.map((dateKey) => {
+        const dayLogs = userLogs.filter((entry) => entry.date === dateKey)
+        const totals = dayLogs.reduce((acc, entry) => {
+          const normalizedType = String(entry.type || '').startsWith('sudoku') ? 'sudoku' : entry.type
+          acc[normalizedType] = (acc[normalizedType] || 0) + Number(entry.value || 0)
+          return acc
+        }, { pomodoro: 0, meditation: 0, sudoku: 0, memory: 0, reaction: 0 })
+
+        const score =
+          Math.min(totals.pomodoro, 25) +
+          Math.min(totals.meditation, 5) * 4 +
+          Math.min(totals.sudoku, 1) * 15 +
+          Math.min((totals.memory || 0) + (totals.reaction || 0), 1) * 10
+
+        return Math.round(Math.min(100, score))
+      })
+
+      return {
+        username: user.username,
+        fullName: user.fullName,
+        points: user.points,
+        dailyScores,
+      }
+    })
+
+    return res.json({ trends, dateKeys })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
 app.post('/api/meta', authMiddleware, async (req, res) => {
   const { meta } = req.body || {}
   try {
