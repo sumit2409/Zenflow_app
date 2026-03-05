@@ -137,20 +137,6 @@ function hashResetCode(code) {
   return crypto.createHash('sha256').update(String(code || '')).digest('hex')
 }
 
-function redactIdentifier(identifier) {
-  const raw = String(identifier || '').trim()
-  if (!raw) return 'empty'
-  const atIndex = raw.indexOf('@')
-  if (atIndex > 0) {
-    const local = raw.slice(0, atIndex)
-    const domain = raw.slice(atIndex + 1)
-    const maskedLocal = local.length <= 2 ? `${local[0] || '*'}*` : `${local.slice(0, 2)}***`
-    return `${maskedLocal}@${domain}`
-  }
-  if (raw.length <= 3) return `${raw[0] || '*'}**`
-  return `${raw.slice(0, 3)}***`
-}
-
 function slugifyUsername(value) {
   const normalized = String(value || '')
     .toLowerCase()
@@ -261,7 +247,6 @@ async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
         console.error(`[resend] send failed status=${response.status} body=${errorText}`)
         return { attempted: true, delivered: false }
       }
-      console.log(`[resend] send result delivered=true recipients=${normalizedRecipients.length}`)
       return { attempted: true, delivered: true }
     } catch (error) {
       console.error('[resend] send failed:', error?.message || error)
@@ -286,9 +271,7 @@ async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
       )
       const result = await Promise.race([sendAttempt, timeout])
       const acceptedCount = Array.isArray(result?.accepted) ? result.accepted.length : 0
-      const rejectedCount = Array.isArray(result?.rejected) ? result.rejected.length : 0
       const delivered = acceptedCount > 0
-      console.log(`[smtp] send result delivered=${delivered} accepted=${acceptedCount} rejected=${rejectedCount}`)
       return { attempted: true, delivered }
     } catch (error) {
       console.error('SMTP send failed:', error?.message || error)
@@ -633,14 +616,12 @@ app.post('/api/password/forgot', async (req, res) => {
   }
 
   const successMessage = 'If that account exists, a password reset code has been prepared.'
-  console.log(`[auth] forgot-password requested for ${redactIdentifier(identifier)}`)
 
   try {
     if (useFileStorage) {
       const data = readData()
       const match = findFileUser(data, identifier)
       if (!match || !match.user.email) {
-        console.log('[auth] forgot-password result: file-user-missing-or-no-email')
         return res.json({ ok: true, message: successMessage })
       }
 
@@ -658,9 +639,6 @@ app.post('/api/password/forgot', async (req, res) => {
         code,
         resetUrl,
       })
-      console.log(
-        `[auth] forgot-password result: file-user-found delivery=${delivery.delivered} provider=${delivery.provider || 'unknown'}`
-      )
 
       return res.json({
         ok: true,
@@ -673,7 +651,6 @@ app.post('/api/password/forgot', async (req, res) => {
 
     const user = await findDbUser(identifier)
     if (!user || !user.email) {
-      console.log('[auth] forgot-password result: db-user-missing-or-no-email')
       return res.json({ ok: true, message: successMessage })
     }
 
@@ -691,9 +668,6 @@ app.post('/api/password/forgot', async (req, res) => {
       code,
       resetUrl,
     })
-    console.log(
-      `[auth] forgot-password result: db-user-found delivery=${delivery.delivered} provider=${delivery.provider || 'unknown'}`
-    )
 
     return res.json({
       ok: true,
@@ -1037,20 +1011,6 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const DEFAULT_PORT = Number(process.env.PORT || 4100)
-
-console.log(
-  '[startup] SMTP config:',
-  JSON.stringify({
-    hostSet: Boolean(SMTP_HOST),
-    fromSet: Boolean(SMTP_FROM),
-    userSet: Boolean(SMTP_USER),
-    passSet: Boolean(SMTP_PASS),
-    secure: SMTP_SECURE,
-    port: SMTP_PORT,
-    publicAppUrlSet: Boolean(PUBLIC_APP_URL),
-    resendConfigured: Boolean(RESEND_API_KEY && RESEND_FROM),
-  })
-)
 
 function startServer(port) {
   const server = app.listen(port, () => {
