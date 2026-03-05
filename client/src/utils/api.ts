@@ -2,11 +2,13 @@ import { Capacitor } from '@capacitor/core'
 
 const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '')
 const configuredAndroidBaseUrl = (import.meta.env.VITE_ANDROID_API_BASE_URL || '').trim().replace(/\/+$/, '')
+const productionAndroidBaseUrl = 'https://zenflow.bio'
 
 function resolveBaseUrl() {
   if (configuredBaseUrl) return configuredBaseUrl
   if (Capacitor.getPlatform() === 'android') {
-    return configuredAndroidBaseUrl || 'http://10.0.2.2:4100'
+    if (configuredAndroidBaseUrl) return configuredAndroidBaseUrl
+    return import.meta.env.DEV ? 'http://10.0.2.2:4100' : productionAndroidBaseUrl
   }
   return ''
 }
