@@ -2963,6 +2963,67 @@ input[type='date'],
   }
 }
 
+/* ── Android WebView overrides ── */
+
+/* Prevent full-page overscroll bounce (Android Chrome/WebView) */
+html {
+  overscroll-behavior: none;
+}
+
+/* Remove blue tap flash on all interactive elements in WebView */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Improve text rendering in WebView */
+body {
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Prevent WebView from zooming on double-tap (inputs) */
+input,
+textarea,
+select,
+button {
+  touch-action: manipulation;
+}
+
+/* Fix: prevent select dropdowns from causing zoom on focus in WebView */
+input,
+select,
+textarea {
+  font-size: max(16px, 1em);
+}
+
+/* Android app — hide hover-only affordances that don't work on touch */
+[data-platform='android'] .hero-stat::after,
+[data-platform='android'] .feature-card::after,
+[data-platform='android'] .quest-row::after,
+[data-platform='android'] .detail-card::after,
+[data-platform='android'] .achievement-pill::after,
+[data-platform='android'] .chart-block::after {
+  display: none;
+}
+
+/* Android app — increase bottom nav padding for gesture navigation bar */
+[data-platform='android'] .bottom-nav {
+  padding-bottom: max(env(safe-area-inset-bottom, 16px), 20px);
+}
+
+/* Android app — increase tap target areas slightly */
+[data-platform='android'] .nav-link,
+[data-platform='android'] .bottom-nav-item {
+  min-height: 52px;
+}
+
+/* Android app — disable mouse-specific hover transforms */
+[data-platform='android'] button:hover,
+[data-platform='android'] .card:hover,
+[data-platform='android'] .feature-card:hover {
+  transform: none;
+}
+
 .penguin-mascot {
   position: fixed;
   right: 22px;

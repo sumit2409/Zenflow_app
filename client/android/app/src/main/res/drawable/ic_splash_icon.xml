@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer circle — amber ring -->
+    <path
+        android:pathData="M54,54m-38,0a38,38 0,1 1,76 0a38,38 0,1 1,-76 0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="20"
+                android:startY="20"
+                android:endX="88"
+                android:endY="88">
+                <item android:offset="0" android:color="#D7A36D"/>
+                <item android:offset="1" android:color="#7D9577"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Inner circle — cream fill -->
+    <path
+        android:pathData="M54,54m-28,0a28,28 0,1 1,56 0a28,28 0,1 1,-56 0"
+        android:fillColor="#F3EADF"/>
+
+    <!-- Center dot — ink -->
+    <path
+        android:pathData="M54,54m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="46"
+                android:startY="46"
+                android:endX="62"
+                android:endY="62">
+                <item android:offset="0" android:color="#D7A36D"/>
+                <item android:offset="1" android:color="#7D9577"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+</vector>
+

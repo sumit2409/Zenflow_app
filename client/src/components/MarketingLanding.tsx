@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+﻿import React, { useMemo, useState } from 'react'
 import type { GoalIntent } from '../types/experience'
 
 type Props = {
@@ -69,7 +69,7 @@ const faqs = [
 
 export default function MarketingLanding({ onOpenAuth }: Props) {
   const [selectedGoal, setSelectedGoal] = useState<GoalIntent>('focus')
-  const androidAppUrl = '/download/android'
+  const androidAppUrl = 'https://zenflow-api.onrender.com/download/android'
   const selectedPlan = useMemo(
     () => goalOptions.find((goal) => goal.id === selectedGoal) || goalOptions[0],
     [selectedGoal],
@@ -91,7 +91,7 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
               Download for Android
             </a>{' '}
             <span style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>
-              (.apk file — requires "Install unknown apps" enabled on your device)
+              (.apk file - requires "Install unknown apps" enabled on your device)
             </span>{' '}
             while the Google Play release is being prepared.
           </p>
@@ -233,3 +233,4 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
     </div>
   )
 }
+

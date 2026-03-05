@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Zenflow brand palette -->
+    <color name="zenflow_cream">#EFE3D5</color>
+    <color name="zenflow_amber">#D7A36D</color>
+    <color name="zenflow_sage">#7D9577</color>
+    <color name="zenflow_ink">#2F241E</color>
+
+    <!-- Legacy Capacitor references — update to brand -->
+    <color name="colorPrimary">#D7A36D</color>
+    <color name="colorPrimaryDark">#2F241E</color>
+    <color name="colorAccent">#7D9577</color>
+</resources>
+

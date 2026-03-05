@@ -17,6 +17,11 @@ import { todayKey } from './utils/wellness'
 
 const LOCAL_SESSION_KEY = 'zenflow_session'
 const TEMP_SESSION_KEY = 'zenflow_session_temp'
+const isAndroidApp = /ZenflowAndroid/.test(navigator.userAgent)
+
+if (isAndroidApp) {
+  document.documentElement.setAttribute('data-platform', 'android')
+}
 
 function readStoredSession(): StoredSession | null {
   const raw = localStorage.getItem(LOCAL_SESSION_KEY) || sessionStorage.getItem(TEMP_SESSION_KEY)
@@ -148,6 +153,22 @@ export default function App() {
     window.addEventListener('popstate', handlePop)
     return () => window.removeEventListener('popstate', handlePop)
   }, [showLogin])
+
+  useEffect(() => {
+    const handleAndroidBack = () => {
+      if (showLogin) {
+        setShowLogin(false)
+        setGoalIntent(null)
+        return
+      }
+      if (selected) {
+        setSelected(null)
+      }
+    }
+
+    window.addEventListener('androidBackPressed', handleAndroidBack)
+    return () => window.removeEventListener('androidBackPressed', handleAndroidBack)
+  }, [showLogin, selected])
 
   useEffect(() => {
     if (!showLogin || !overlayRef.current) return
@@ -526,7 +547,7 @@ export default function App() {
         ) : (
           <section className="focus-card fade-rise">
             <button className="back tool-back-btn" onClick={() => setView(null)}>
-              ? Back to dashboard
+              &larr; Back to dashboard
             </button>
             {selected === 'pomodoro' && <PomodoroTimer user={user} token={token} onRequireLogin={() => openAuth('login')} onSelect={setView} />}
             {selected === 'meditation' && <MeditationTimer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
