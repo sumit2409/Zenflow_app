@@ -118,6 +118,14 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
   }, [initialMode])
 
   useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose?.()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
+  useEffect(() => {
     async function loadAuthConfig() {
       try {
         const response = await fetch(apiUrl('/api/auth/config'))
@@ -501,7 +509,7 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
   }
 
   return (
-    <div className="auth-experience">
+    <div className="auth-experience" role="dialog" aria-modal="true" aria-labelledby="auth-dialog-title">
       <div className="auth-sheet card">
         <aside className="auth-story">
           <div className="section-kicker">Account access</div>
@@ -554,7 +562,7 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
           <div className="auth-panel-head">
             <div>
               <div className="section-kicker">{kickerByMode[mode]}</div>
-              <h3>{titleByMode[mode]}</h3>
+              <h3 id="auth-dialog-title">{titleByMode[mode]}</h3>
             </div>
             <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
               <button type="button" className={`auth-tab ${mode === 'login' ? 'active' : ''}`} onClick={() => switchMode('login')}>Login</button>
@@ -576,9 +584,12 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
             {mode === 'register' && (
               <>
                 <label>
-                  Full name
+                  Full name <span aria-hidden="true" style={{ color: '#8a3f35', marginLeft: '2px' }}>*</span>
                   <input
+                    autoFocus
                     autoComplete="name"
+                    aria-required="true"
+                    required
                     placeholder="Aman Sharma"
                     value={form.fullName}
                     onChange={(event) => updateField('fullName', event.target.value)}
@@ -586,9 +597,11 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
                 </label>
                 <div className="auth-grid">
                   <label>
-                    Email
+                    Email <span aria-hidden="true" style={{ color: '#8a3f35', marginLeft: '2px' }}>*</span>
                     <input
                       autoComplete="email"
+                      aria-required="true"
+                      required
                       placeholder="you@example.com"
                       type="email"
                       value={form.email}
@@ -596,9 +609,11 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
                     />
                   </label>
                   <label>
-                    Username
+                    Username <span aria-hidden="true" style={{ color: '#8a3f35', marginLeft: '2px' }}>*</span>
                     <input
                       autoComplete="username"
+                      aria-required="true"
+                      required
                       placeholder="zenflow_user"
                       value={form.username}
                       onChange={(event) => updateField('username', event.target.value)}
@@ -612,6 +627,7 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
               <label>
                 Email or username
                 <input
+                  autoFocus
                   autoComplete="username"
                   placeholder="you@example.com or zenflow_user"
                   value={form.identifier}
@@ -621,11 +637,13 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
             )}
 
             {(mode === 'login' || mode === 'register' || mode === 'reset') && (
-              <label>
-                Password
+                <label>
+                Password {mode === 'register' && <span aria-hidden="true" style={{ color: '#8a3f35', marginLeft: '2px' }}>*</span>}
                 <div className="password-field">
                   <input
                     autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    aria-required={mode === 'register' ? 'true' : undefined}
+                    required={mode === 'register'}
                     placeholder={mode === 'login' ? 'Enter your password' : 'Use 8+ chars with mixed case and a number'}
                     type={showPassword ? 'text' : 'password'}
                     value={form.password}
@@ -754,6 +772,11 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
               </button>
               <button type="button" onClick={onClose}>Cancel</button>
             </div>
+            {mode === 'register' && (
+              <p style={{ fontSize: '12px', color: 'var(--ink-soft)', marginTop: '4px' }}>
+                Fields marked <span aria-hidden="true">*</span><span className="sr-only">with an asterisk</span> are required.
+              </p>
+            )}
 
             <div className="auth-secondary-actions">
               {mode === 'login' && (

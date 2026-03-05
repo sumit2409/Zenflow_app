@@ -69,11 +69,14 @@ const faqs = [
 
 export default function MarketingLanding({ onOpenAuth }: Props) {
   const [selectedGoal, setSelectedGoal] = useState<GoalIntent>('focus')
-  const androidAppUrl = 'https://raw.githubusercontent.com/sumit2409/Zenflow_app/main/downloads/zenflow-app.apk'
+  const androidAppUrl = '/download/android'
   const selectedPlan = useMemo(
     () => goalOptions.find((goal) => goal.id === selectedGoal) || goalOptions[0],
     [selectedGoal],
   )
+  const scrollTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
     <div className="landing-shell">
@@ -83,13 +86,20 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
           <div className="eyebrow">Get started</div>
           <h1>Pick a goal and start with the right tools.</h1>
           <p className="lead">
-            Zenflow combines focus timers, meditation, sudoku, memory training, and account tracking in one place. You can use it on the web, and you can also <a className="public-link" href={androidAppUrl} target="_blank" rel="noreferrer">try and share the Android app</a> while the Google Play release is being prepared.
+            Zenflow combines focus timers, meditation, sudoku, memory training, and account tracking in one place. You can use it on the web, and you can also{' '}
+            <a className="public-link" href={androidAppUrl} target="_blank" rel="noreferrer">
+              Download for Android
+            </a>{' '}
+            <span style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>
+              (.apk file — requires "Install unknown apps" enabled on your device)
+            </span>{' '}
+            while the Google Play release is being prepared.
           </p>
-          <nav className="marketing-page-nav" aria-label="Public page sections">
-            <a href="#start">Start here</a>
-            <a href="#plans">Explore plans</a>
-            <a href="#overview">Overview</a>
-            <a href="#about">About us</a>
+          <nav className="marketing-page-nav" aria-label="Page sections">
+            <button type="button" className="page-nav-btn" onClick={() => scrollTo('start')}>Start here</button>
+            <button type="button" className="page-nav-btn" onClick={() => scrollTo('plans')}>Explore plans</button>
+            <button type="button" className="page-nav-btn" onClick={() => scrollTo('overview')}>Overview</button>
+            <button type="button" className="page-nav-btn" onClick={() => scrollTo('about')}>About</button>
           </nav>
           <div className="hero-actions">
             <button className="primary-cta" onClick={() => onOpenAuth('register', selectedPlan.id)}>Create account</button>

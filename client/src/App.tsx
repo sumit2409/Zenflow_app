@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+﻿import React, { useEffect, useRef, useState } from 'react'
 import Dashboard from './components/Dashboard'
 import PomodoroTimer from './components/PomodoroTimer'
 import MeditationTimer from './components/MeditationTimer'
@@ -70,12 +70,17 @@ export default function App() {
   const [profileMeta, setProfileMeta] = useState<ProfileMeta>({})
   const [profileRefreshKey, setProfileRefreshKey] = useState(0)
   const [showLogin, setShowLogin] = useState(false)
+  const [isValidating, setIsValidating] = useState<boolean>(() => Boolean(initialSession?.token))
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [confirmLogout, setConfirmLogout] = useState(false)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [goalIntent, setGoalIntent] = useState<GoalIntent | null>(null)
   const [plannerFocusDate, setPlannerFocusDate] = useState(todayKey())
   const [penguinOffset, setPenguinOffset] = useState({ x: 0, y: 0 })
   const [penguinHopping, setPenguinHopping] = useState(false)
   const [penguinKissing, setPenguinKissing] = useState(false)
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const authTriggerRef = useRef<HTMLElement | null>(null)
 
   const user = account?.username || null
   const guestLandingMode = !account && !selected
@@ -92,9 +97,17 @@ export default function App() {
   ]
   const visibleDesktopNav = desktopNavItems.filter((item) => item.label.toLowerCase().includes(navSearch.trim().toLowerCase()))
 
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    window.setTimeout(() => setToastMsg(null), 3000)
+  }
+
   useEffect(() => {
     async function validateSession() {
-      if (!token) return
+      if (!token) {
+        setIsValidating(false)
+        return
+      }
 
       try {
         const res = await fetch(apiUrl('/api/me'), {
@@ -116,11 +129,53 @@ export default function App() {
         }
       } catch (error) {
         console.error(error)
+      } finally {
+        setIsValidating(false)
       }
     }
 
     void validateSession()
   }, [token])
+
+  useEffect(() => {
+    const handlePop = () => {
+      if (showLogin) {
+        setShowLogin(false)
+        setGoalIntent(null)
+      }
+    }
+
+    window.addEventListener('popstate', handlePop)
+    return () => window.removeEventListener('popstate', handlePop)
+  }, [showLogin])
+
+  useEffect(() => {
+    if (!showLogin || !overlayRef.current) return
+
+    const focusable = overlayRef.current.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+
+    first?.focus()
+
+    const trap = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return
+      if (event.shiftKey) {
+        if (document.activeElement === first) {
+          event.preventDefault()
+          last?.focus()
+        }
+      } else if (document.activeElement === last) {
+        event.preventDefault()
+        first?.focus()
+      }
+    }
+
+    document.addEventListener('keydown', trap)
+    return () => document.removeEventListener('keydown', trap)
+  }, [showLogin])
 
   useEffect(() => {
     async function loadProfileMeta() {
@@ -194,15 +249,36 @@ export default function App() {
     }
   }, [selected])
 
+  const viewTitles: Record<string, string> = {
+    pomodoro: 'Focus Timer — Zenflow',
+    meditation: 'Meditation — Zenflow',
+    sudoku: 'Sudoku — Zenflow',
+    arcade: 'Games — Zenflow',
+    planner: 'Planner — Zenflow',
+    profile: 'Account — Zenflow',
+  }
+
+  useEffect(() => {
+    if (selected && viewTitles[selected]) {
+      document.title = viewTitles[selected]
+    } else if (account) {
+      document.title = 'Dashboard — Zenflow'
+    } else {
+      document.title = 'Zenflow | Focus, Tasks, and Daily Rhythm'
+    }
+  }, [selected, account])
+
   function openPlannerAt(dateKey: string) {
     setPlannerFocusDate(dateKey)
     setSelected('planner')
   }
 
   function openAuth(mode: 'login' | 'register', goal?: GoalIntent) {
+    authTriggerRef.current = document.activeElement as HTMLElement
     setAuthMode(mode)
     if (goal) setGoalIntent(goal)
     setShowLogin(true)
+    history.pushState({ zenflowAuth: true }, '')
   }
 
   function handleLogout() {
@@ -212,6 +288,7 @@ export default function App() {
     setProfileRefreshKey(0)
     setGoalIntent(null)
     clearStoredSession()
+    showToast("You've been signed out.")
   }
 
   function handleBottomNav(section: 'home' | 'dashboard' | 'tools' | 'activity' | 'profile') {
@@ -260,6 +337,29 @@ export default function App() {
     { label: 'Last sign in', value: formatDateLabel(account?.lastLoginAt) },
   ]
 
+  if (isValidating) {
+    return (
+      <div style={{
+        minHeight: '100dvh',
+        display: 'grid',
+        placeItems: 'center',
+        background: 'linear-gradient(180deg, #efe3d5 0%, #f7efe6 100%)',
+      }}>
+        <div style={{ textAlign: 'center', display: 'grid', gap: '14px' }}>
+          <div style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: '38px',
+            fontWeight: 700,
+            color: '#2f241e',
+          }}>
+            Zenflow
+          </div>
+          <div className="skeleton-line" style={{ width: '120px', margin: '0 auto' }} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="app-root">
       <button
@@ -274,18 +374,18 @@ export default function App() {
         onClick={handlePenguinClick}
         aria-label="Penguin mascot"
       >
-        <div className="penguin-shadow" />
+        <div className="penguin-shadow" aria-hidden="true" />
         <div className="penguin-body">
-          <div className="penguin-belly" />
-          <div className="penguin-eye penguin-eye-left" />
-          <div className="penguin-eye penguin-eye-right" />
-          <div className="penguin-beak" />
-          <div className="penguin-wing penguin-wing-left" />
-          <div className="penguin-wing penguin-wing-right" />
-          <div className="penguin-feet" />
-          <div className="penguin-kiss">mwah</div>
-          <div className="penguin-heart penguin-heart-left">❤</div>
-          <div className="penguin-heart penguin-heart-right">❤</div>
+          <div className="penguin-belly" aria-hidden="true" />
+          <div className="penguin-eye penguin-eye-left" aria-hidden="true" />
+          <div className="penguin-eye penguin-eye-right" aria-hidden="true" />
+          <div className="penguin-beak" aria-hidden="true" />
+          <div className="penguin-wing penguin-wing-left" aria-hidden="true" />
+          <div className="penguin-wing penguin-wing-right" aria-hidden="true" />
+          <div className="penguin-feet" aria-hidden="true" />
+          <div className="penguin-kiss" aria-hidden="true">mwah</div>
+          <div className="penguin-heart penguin-heart-left" aria-hidden="true">&#10084;</div>
+          <div className="penguin-heart penguin-heart-right" aria-hidden="true">&#10084;</div>
         </div>
       </button>
       <header className={`app-header fade-rise ${guestLandingMode ? 'guest-header' : ''}`}>
@@ -296,16 +396,27 @@ export default function App() {
             <div className="brand-sub">Focus, meditation, sudoku, and quick games</div>
           </div>
         </div>
-        {(account || selected) && (
-          <nav className="nav" aria-label="Main navigation">
-            {visibleDesktopNav.map((item) => (
-              <button key={item.label} className={`nav-link ${selected === item.id ? 'active' : ''}`} onClick={() => setView(item.id)}>
-                {item.label}
-              </button>
-            ))}
-          </nav>
-        )}
-        {(account || selected) && (
+        <nav className="nav" aria-label="Main navigation">
+          {account ? (
+            visibleDesktopNav.length > 0 ? (
+              visibleDesktopNav.map((item) => (
+                <button key={item.label} className={`nav-link ${selected === item.id ? 'active' : ''}`} onClick={() => setView(item.id)}>
+                  {item.label}
+                </button>
+              ))
+            ) : (
+              <span style={{ fontSize: '13px', color: 'var(--ink-soft)', padding: '10px 14px' }}>No sections match</span>
+            )
+          ) : (
+            <>
+              <a className="nav-link" href="#start">Home</a>
+              <a className="nav-link" href="#plans">Features</a>
+              <a className="nav-link" href="#overview">Overview</a>
+              <a className="nav-link" href="#about">About</a>
+            </>
+          )}
+        </nav>
+        {account && (
           <label className="header-search" aria-label="Search navigation">
             <input
               type="search"
@@ -321,11 +432,17 @@ export default function App() {
               <div className="auth-summary account-summary">
                 <strong>{account.fullName}</strong>
                 <span className="muted">@{account.username}</span>
-                <span className="account-summary-line">{account.email}</span>
-                <span className="account-summary-line">Sign-ins: {account.loginCount}</span>
               </div>
               <button className="login-btn" onClick={() => setView('profile')}>Account</button>
-              <button className="login-btn" onClick={handleLogout}>Logout</button>
+              {confirmLogout ? (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>Sign out?</span>
+                  <button className="login-btn logout-confirm-btn" onClick={() => { handleLogout(); setConfirmLogout(false) }}>Yes</button>
+                  <button className="login-btn" onClick={() => setConfirmLogout(false)}>Cancel</button>
+                </div>
+              ) : (
+                <button className="login-btn logout-btn" onClick={() => setConfirmLogout(true)}>Logout</button>
+              )}
             </>
           ) : (
             <>
@@ -408,7 +525,9 @@ export default function App() {
           </>
         ) : (
           <section className="focus-card fade-rise">
-            <button className="back" onClick={() => setView(null)}>&lt; Back to dashboard</button>
+            <button className="back tool-back-btn" onClick={() => setView(null)}>
+              ? Back to dashboard
+            </button>
             {selected === 'pomodoro' && <PomodoroTimer user={user} token={token} onRequireLogin={() => openAuth('login')} onSelect={setView} />}
             {selected === 'meditation' && <MeditationTimer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
             {selected === 'sudoku' && <SudokuTrainer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
@@ -419,7 +538,7 @@ export default function App() {
         )}
       </main>
       {showLogin && (
-        <div className="overlay">
+        <div className="overlay" ref={overlayRef}>
           <Login
             initialMode={authMode}
             goalIntent={goalIntent}
@@ -434,6 +553,8 @@ export default function App() {
             onClose={() => {
               setGoalIntent(null)
               setShowLogin(false)
+              if (history.state?.zenflowAuth) history.back()
+              window.setTimeout(() => authTriggerRef.current?.focus(), 50)
             }}
           />
         </div>
@@ -455,6 +576,12 @@ export default function App() {
           <span>Profile</span>
         </button>
       </nav>
+      {toastMsg && (
+        <div className="toast-notification" role="status" aria-live="polite">
+          {toastMsg}
+        </div>
+      )}
     </div>
   )
 }
+
