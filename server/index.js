@@ -376,9 +376,8 @@ async function sendEmailVerificationEmail({ to, fullName, code, verifyUrl }) {
   })
 }
 
-function buildCommunityAnnouncementEmail({ fullName, downloadUrl }) {
+function buildCommunityAnnouncementEmail({ fullName, downloadUrl, websiteUrl = 'https://zenflow.bio' }) {
   const safeName = sanitizeFullName(fullName) || 'there'
-  const websiteUrl = PUBLIC_APP_URL || 'https://zenflow.bio'
   return {
     subject: 'Zenflow Android app update for our earliest community members',
     text: [
@@ -407,8 +406,8 @@ function buildCommunityAnnouncementEmail({ fullName, downloadUrl }) {
   }
 }
 
-async function sendCommunityAnnouncementEmail({ to, fullName, preferredProvider = 'auto', downloadUrl }) {
-  const mail = buildCommunityAnnouncementEmail({ fullName, downloadUrl })
+async function sendCommunityAnnouncementEmail({ to, fullName, preferredProvider = 'auto', downloadUrl, websiteUrl }) {
+  const mail = buildCommunityAnnouncementEmail({ fullName, downloadUrl, websiteUrl })
   return sendTransactionalEmail({
     to,
     subject: mail.subject,
@@ -649,7 +648,8 @@ app.post('/api/admin/announce/android-release', async (req, res) => {
   const limitRaw = Number(req.body?.limit || 0)
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : null
   const onlyRaw = String(req.body?.only || '').trim().toLowerCase()
-  const downloadUrl = APK_DOWNLOAD_URL || DEFAULT_APK_DIRECT_URL
+  const downloadUrl = DEFAULT_APK_DIRECT_URL
+  const websiteUrl = 'https://zenflow.bio'
 
   try {
     let recipients = []
@@ -703,6 +703,7 @@ app.post('/api/admin/announce/android-release', async (req, res) => {
           fullName: recipient.fullName || 'there',
           preferredProvider,
           downloadUrl,
+          websiteUrl,
         })
         if (!result.delivered) {
           failed.push({ email: recipient.email, reason: `${result.provider || preferredProvider} delivery failed` })
