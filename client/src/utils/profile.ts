@@ -9,6 +9,7 @@ export type TodoItem = {
   assignedPomodoros?: number
   completedPomodoros?: number
   bonusAwarded?: boolean
+  linkedPlannerTaskId?: string
 }
 
 export type ProfileMeta = WellnessMeta & {

@@ -28,6 +28,7 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
   const [todoMap, setTodoMap] = useState<Record<string, TodoItem[]>>({})
   const [statusNote, setStatusNote] = useState('Assign a task, set a session goal, and start the cycle.')
   const timerRef = useRef<number | null>(null)
+  const lastTickRef = useRef<number | null>(null)
   const phaseRef = useRef<Phase>('work')
   const completedRef = useRef(false)
 
@@ -68,13 +69,24 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect }:
 
   useEffect(() => {
     if (running) {
-      timerRef.current = window.setInterval(() => setSeconds((value) => value - 1), 1000)
+      lastTickRef.current = Date.now()
+      timerRef.current = window.setInterval(() => {
+        const now = Date.now()
+        const lastTick = lastTickRef.current ?? now
+        const elapsedSeconds = Math.floor((now - lastTick) / 1000)
+        if (elapsedSeconds <= 0) return
+
+        lastTickRef.current = lastTick + elapsedSeconds * 1000
+        setSeconds((value) => Math.max(0, value - elapsedSeconds))
+      }, 250)
     } else if (timerRef.current) {
       clearInterval(timerRef.current)
       timerRef.current = null
+      lastTickRef.current = null
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
+      lastTickRef.current = null
     }
   }, [running])
 

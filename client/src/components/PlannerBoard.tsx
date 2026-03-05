@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { apiUrl } from '../utils/api'
-import { type ProfileMeta } from '../utils/profile'
+import { type ProfileMeta, type TodoItem } from '../utils/profile'
 import {
   addPlannerItem,
   defaultReminderTimes,
@@ -137,6 +137,7 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
 
   const planner = meta.planner || { remindersEnabled: true, reminderTimes: defaultReminderTimes, customItems: [], completions: {} }
   const reminderTimes = getReminderTimes(planner)
+  const selectedJournal = (meta.journals?.[selectedDate] || '').trim()
   const selectedSummary = useMemo(() => getDaySummary(selectedDate, planner), [planner, selectedDate])
   const plannerEntries = selectedSummary.entries
   const requiredEntries = plannerEntries.filter((entry) => entry.required)
@@ -146,9 +147,10 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
   const yearMonths = useMemo(() => getYearMonths(selectedDate), [selectedDate])
   const quickDates = useMemo(() => Array.from({ length: 4 }, (_, index) => shiftPlannerDate(todayKey(), index)), [])
 
-  async function persistPlanner(nextPlanner: PlannerMeta, message: string) {
+  async function persistPlanner(nextPlanner: PlannerMeta, message: string, extraMetaPatch?: Partial<ProfileMeta>) {
     const previousPlanner = meta.planner
-    setMeta((current) => ({ ...current, planner: nextPlanner }))
+    const previousMeta = meta
+    setMeta((current) => ({ ...current, planner: nextPlanner, ...(extraMetaPatch || {}) }))
     if (!user || !token) {
       onRequireLogin?.()
       return
@@ -160,7 +162,7 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
       const response = await fetch(apiUrl('/api/meta'), {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({ meta: { planner: nextPlanner } }),
+        body: JSON.stringify({ meta: { planner: nextPlanner, ...(extraMetaPatch || {}) } }),
       })
       if (!response.ok) {
         throw new Error(`Planner save failed with status ${response.status}`)
@@ -170,11 +172,39 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
       onMetaSaved?.()
     } catch (error) {
       console.error(error)
-      setMeta((current) => ({ ...current, planner: previousPlanner }))
+      setMeta({ ...previousMeta, planner: previousPlanner })
       setSaveMessage('Planner save failed.')
     } finally {
       setIsSaving(false)
     }
+  }
+
+  async function linkTaskToFocus(task: { id: string; title: string }, dateKey: string) {
+    const currentTodos = meta.todosByDate || {}
+    const targetTodos = [...(currentTodos[dateKey] || [])]
+    const existing = targetTodos.find((todo) => todo.linkedPlannerTaskId === task.id)
+    if (existing) {
+      setSaveMessage('This planner task is already linked to the focus timer.')
+      return
+    }
+
+    const linkedTodo: TodoItem = {
+      id: `focus-${task.id}-${Date.now()}`,
+      text: task.title,
+      done: false,
+      assignedPomodoros: 1,
+      completedPomodoros: 0,
+      bonusAwarded: false,
+      linkedPlannerTaskId: task.id,
+    }
+    const nextTodosByDate = {
+      ...currentTodos,
+      [dateKey]: [...targetTodos, linkedTodo],
+    }
+
+    await persistPlanner(planner, `Linked "${task.title}" to the focus timer for ${formatPlannerDate(dateKey)}.`, {
+      todosByDate: nextTodosByDate,
+    })
   }
 
   async function toggleEntry(taskId: string, completed: boolean) {
@@ -346,6 +376,9 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
                         {entry.time} {entry.required ? 'Required every day' : entry.repeat === 'daily' ? 'Repeats daily' : 'One-time task'}
                       </span>
                     </div>
+                    <button type="button" className="ghost-btn" onClick={() => void linkTaskToFocus(entry, selectedDate)} disabled={isSaving}>
+                      Link to focus
+                    </button>
                     {!entry.required && (
                       <button type="button" className="ghost-btn" onClick={() => void removeCustomTask(entry.id)} disabled={isSaving}>Remove</button>
                     )}
@@ -464,6 +497,9 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
                   <strong>{entry.title}</strong>
                   <span>{entry.time} Required every day</span>
                 </div>
+                <button type="button" className="ghost-btn" onClick={() => void linkTaskToFocus(entry, selectedDate)} disabled={isSaving}>
+                  Link to focus
+                </button>
               </div>
             ))}
           </div>
@@ -494,6 +530,9 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
                   <strong>{entry.title}</strong>
                   <span>{entry.repeat === 'daily' ? `Daily at ${entry.time}` : `${formatPlannerDate(entry.date)} at ${entry.time}`}</span>
                 </div>
+                <button type="button" className="ghost-btn" onClick={() => void linkTaskToFocus(entry, selectedDate)} disabled={isSaving}>
+                  Link to focus
+                </button>
                 <button type="button" className="ghost-btn" onClick={() => void removeCustomTask(entry.id)} disabled={isSaving}>Remove</button>
               </div>
             )) : (
@@ -503,6 +542,24 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
               </div>
             )}
           </div>
+
+          <div className="planner-section-head planner-section-spaced">
+            <div className="section-kicker">Journal for selected date</div>
+            <span className="muted">{formatPlannerDate(selectedDate)}</span>
+          </div>
+          {selectedJournal ? (
+            <article className="planner-item">
+              <div className="planner-item-copy">
+                <strong>Saved journal note</strong>
+                <span>{selectedJournal}</span>
+              </div>
+            </article>
+          ) : (
+            <div className="empty-panel">
+              <h4>No journal saved</h4>
+              <p>Save a journal note in your Account screen to see it here.</p>
+            </div>
+          )}
         </section>
 
         <section className="planner-card card inset-card">
