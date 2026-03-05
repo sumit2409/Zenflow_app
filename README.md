@@ -124,6 +124,9 @@ API configuration for Android:
 - web builds keep using relative `/api` calls unless `VITE_API_BASE_URL` is set
 - Android builds default to `http://10.0.2.2:4100` for the emulator when `VITE_API_BASE_URL` is not set
 - set `VITE_ANDROID_API_BASE_URL` before `npm run build:android` if you need a different backend host, such as a LAN IP for a physical device
+- set `VITE_ANDROID_APK_URL` to control the public Android download link shown on the landing page
+  - GitHub direct download example: `https://github.com/<owner>/<repo>/releases/latest/download/zenflow-app.apk`
+  - Render-hosted direct download example: `https://<your-render-service>.onrender.com/downloads/zenflow-app.apk`
 
 Build a debug APK directly:
 
