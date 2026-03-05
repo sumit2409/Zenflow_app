@@ -2,6 +2,7 @@ export interface AuthAccount {
   username: string
   fullName: string
   email: string
+  emailVerified?: boolean
   authProvider?: string
   created: number | null
   lastLoginAt: number | null

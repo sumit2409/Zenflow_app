@@ -31,6 +31,7 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000
 const MAX_LOGIN_ATTEMPTS = 5
 const LOCKOUT_MS = 10 * 60 * 1000
 const PASSWORD_RESET_WINDOW_MS = 15 * 60 * 1000
+const EMAIL_VERIFICATION_WINDOW_MS = 15 * 60 * 1000
 const loginAttempts = new Map()
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null
 let mailTransporter = null
@@ -48,6 +49,9 @@ const userSchema = new mongoose.Schema({
   authProvider: { type: String, default: 'local' },
   resetPasswordCodeHash: String,
   resetPasswordExpiresAt: Number,
+  emailVerified: { type: Boolean, default: true },
+  emailVerificationCodeHash: String,
+  emailVerificationExpiresAt: Number,
   created: Number,
   lastLoginAt: Number,
   loginCount: { type: Number, default: 0 },
@@ -137,6 +141,13 @@ function hashResetCode(code) {
   return crypto.createHash('sha256').update(String(code || '')).digest('hex')
 }
 
+function isEmailVerified(user) {
+  if (!user) return false
+  if (user.googleId) return true
+  if (user.emailVerified === undefined || user.emailVerified === null) return true
+  return Boolean(user.emailVerified)
+}
+
 function slugifyUsername(value) {
   const normalized = String(value || '')
     .toLowerCase()
@@ -176,6 +187,19 @@ function buildResetUrl(req, identifier, code) {
   return `${baseUrl}/?${params.toString()}`
 }
 
+function buildEmailVerificationUrl(req, identifier, code) {
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim()
+  const protocol = forwardedProto || req.protocol || 'https'
+  const host = req.get('host')
+  const baseUrl = PUBLIC_APP_URL || `${protocol}://${host}`
+  const params = new URLSearchParams({
+    verify: '1',
+    identifier: String(identifier || ''),
+    code: String(code || ''),
+  })
+  return `${baseUrl}/?${params.toString()}`
+}
+
 function buildResetEmail({ fullName, code, resetUrl }) {
   const safeName = sanitizeFullName(fullName) || 'there'
   return {
@@ -206,8 +230,37 @@ function buildResetEmail({ fullName, code, resetUrl }) {
   }
 }
 
-async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
-  const mail = buildResetEmail({ fullName, code, resetUrl })
+function buildEmailVerificationEmail({ fullName, code, verifyUrl }) {
+  const safeName = sanitizeFullName(fullName) || 'there'
+  return {
+    subject: `Zenflow verify your email: ${code}`,
+    text: [
+      `Hi ${safeName},`,
+      '',
+      'Welcome to Zenflow.',
+      '',
+      `Verification code: ${code}`,
+      '',
+      `Verification link: ${verifyUrl}`,
+      '',
+      'This code expires in 15 minutes.',
+      'If you did not create this account, ignore this email.',
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#2f241e">
+        <p>Hi ${safeName},</p>
+        <p>Welcome to Zenflow.</p>
+        <p>Use this verification code to activate your account:</p>
+        <p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p>
+        <p><a href="${verifyUrl}">Open Zenflow to verify your email</a></p>
+        <p>This code expires in 15 minutes.</p>
+        <p>If you did not create this account, ignore this email.</p>
+      </div>
+    `,
+  }
+}
+
+async function sendTransactionalEmail({ to, subject, text, html }) {
   const recipients = Array.isArray(to) ? to : [to]
   const normalizedRecipients = Array.from(
     new Set(
@@ -234,9 +287,9 @@ async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
           from: RESEND_FROM,
           to: normalizedRecipients,
           bcc: SMTP_RESET_BCC ? [SMTP_RESET_BCC] : undefined,
-          subject: mail.subject,
-          text: mail.text,
-          html: mail.html,
+          subject,
+          text,
+          html,
         }),
         signal: controller.signal,
       })
@@ -262,9 +315,9 @@ async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
         from: SMTP_FROM,
         to: normalizedRecipients.join(', '),
         bcc: SMTP_RESET_BCC || undefined,
-        subject: mail.subject,
-        text: mail.text,
-        html: mail.html,
+        subject,
+        text,
+        html,
       })
       const timeout = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('SMTP send timeout after 20s')), 20000)
@@ -289,6 +342,26 @@ async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
   return { delivered: false, provider: resendResult.attempted ? 'resend+smtp' : 'smtp' }
 }
 
+async function sendPasswordResetEmail({ to, fullName, code, resetUrl }) {
+  const mail = buildResetEmail({ fullName, code, resetUrl })
+  return sendTransactionalEmail({
+    to,
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html,
+  })
+}
+
+async function sendEmailVerificationEmail({ to, fullName, code, verifyUrl }) {
+  const mail = buildEmailVerificationEmail({ fullName, code, verifyUrl })
+  return sendTransactionalEmail({
+    to,
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html,
+  })
+}
+
 function buildAccount(user) {
   if (!user) return null
   return {
@@ -299,6 +372,7 @@ function buildAccount(user) {
     created: user.created || null,
     lastLoginAt: user.lastLoginAt || null,
     loginCount: Number(user.loginCount || 0),
+    emailVerified: isEmailVerified(user),
   }
 }
 
@@ -426,13 +500,17 @@ app.get('/health', (req, res) => {
 })
 
 app.get('/api/auth/config', (req, res) => {
+  const emailDeliveryEnabled = Boolean((SMTP_HOST && SMTP_FROM) || (RESEND_API_KEY && RESEND_FROM))
   res.json({
     google: {
       enabled: Boolean(GOOGLE_CLIENT_ID),
       clientId: GOOGLE_CLIENT_ID || null,
     },
     passwordResetEmail: {
-      enabled: Boolean(SMTP_HOST && SMTP_FROM),
+      enabled: emailDeliveryEnabled,
+    },
+    emailVerification: {
+      enabled: emailDeliveryEnabled,
     },
   })
 })
@@ -491,6 +569,7 @@ app.post('/api/register', async (req, res) => {
       if (emailTaken) return res.status(409).json({ error: 'email already exists' })
 
       const created = Date.now()
+      const verificationCode = createResetCode()
       data.users[username] = {
         username,
         usernameLower,
@@ -499,14 +578,32 @@ app.post('/api/register', async (req, res) => {
         fullName,
         password: bcrypt.hashSync(password, 10),
         authProvider: 'local',
+        emailVerified: false,
+        emailVerificationCodeHash: hashResetCode(verificationCode),
+        emailVerificationExpiresAt: created + EMAIL_VERIFICATION_WINDOW_MS,
         created,
-        lastLoginAt: created,
-        loginCount: 1,
+        lastLoginAt: null,
+        loginCount: 0,
       }
       writeData(data)
 
-      const token = genToken(username)
-      return res.json({ username, token, account: buildAccount(data.users[username]) })
+      const verifyUrl = buildEmailVerificationUrl(req, email, verificationCode)
+      const delivery = await sendEmailVerificationEmail({
+        to: email,
+        fullName,
+        code: verificationCode,
+        verifyUrl,
+      })
+
+      return res.json({
+        ok: true,
+        requiresEmailVerification: true,
+        identifier: email,
+        message: delivery.delivered
+          ? 'Account created. Enter the verification code we sent to your email.'
+          : 'Account created. Email delivery is unavailable, but you can still verify with the code below in development.',
+        previewCode: delivery.delivered || isProduction ? undefined : verificationCode,
+      })
     }
 
     const existing = await User.findOne({
@@ -518,6 +615,7 @@ app.post('/api/register', async (req, res) => {
     }
 
     const created = Date.now()
+    const verificationCode = createResetCode()
     const user = new User({
       username,
       usernameLower,
@@ -526,14 +624,32 @@ app.post('/api/register', async (req, res) => {
       fullName,
       password: bcrypt.hashSync(password, 10),
       authProvider: 'local',
+      emailVerified: false,
+      emailVerificationCodeHash: hashResetCode(verificationCode),
+      emailVerificationExpiresAt: created + EMAIL_VERIFICATION_WINDOW_MS,
       created,
-      lastLoginAt: created,
-      loginCount: 1,
+      lastLoginAt: null,
+      loginCount: 0,
     })
     await user.save()
 
-    const token = genToken(username)
-    return res.json({ username, token, account: buildAccount(user.toObject()) })
+    const verifyUrl = buildEmailVerificationUrl(req, email, verificationCode)
+    const delivery = await sendEmailVerificationEmail({
+      to: email,
+      fullName,
+      code: verificationCode,
+      verifyUrl,
+    })
+
+    return res.json({
+      ok: true,
+      requiresEmailVerification: true,
+      identifier: email,
+      message: delivery.delivered
+        ? 'Account created. Enter the verification code we sent to your email.'
+        : 'Account created. Email delivery is unavailable, but you can still verify with the code below in development.',
+      previewCode: delivery.delivered || isProduction ? undefined : verificationCode,
+    })
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'server error' })
@@ -571,6 +687,13 @@ app.post('/api/login', async (req, res) => {
         registerFailedAttempt(attemptKey)
         return res.status(401).json({ error: 'invalid credentials' })
       }
+      if (!isEmailVerified(match.user)) {
+        return res.status(403).json({
+          error: 'verify your email before signing in',
+          requiresEmailVerification: true,
+          identifier: match.user.email || match.key,
+        })
+      }
 
       clearFailedAttempts(attemptKey)
       match.user.lastLoginAt = Date.now()
@@ -595,6 +718,13 @@ app.post('/api/login', async (req, res) => {
       registerFailedAttempt(attemptKey)
       return res.status(401).json({ error: 'invalid credentials' })
     }
+    if (!isEmailVerified(user)) {
+      return res.status(403).json({
+        error: 'verify your email before signing in',
+        requiresEmailVerification: true,
+        identifier: user.email || user.username,
+      })
+    }
 
     clearFailedAttempts(attemptKey)
     user.lastLoginAt = Date.now()
@@ -603,6 +733,149 @@ app.post('/api/login', async (req, res) => {
 
     const token = genToken(user.username)
     return res.json({ username: user.username, token, account: buildAccount(user.toObject()) })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/email/verify/resend', async (req, res) => {
+  const identifier = String(req.body?.identifier || '').trim()
+  if (!identifier) {
+    return res.status(400).json({ error: 'email or username is required' })
+  }
+
+  try {
+    if (useFileStorage) {
+      const data = readData()
+      const match = findFileUser(data, identifier)
+      if (!match || !match.user.email) {
+        return res.status(404).json({ error: 'account not found' })
+      }
+      if (isEmailVerified(match.user)) {
+        return res.json({ ok: true, message: 'Email is already verified.' })
+      }
+
+      const code = createResetCode()
+      match.user.emailVerificationCodeHash = hashResetCode(code)
+      match.user.emailVerificationExpiresAt = Date.now() + EMAIL_VERIFICATION_WINDOW_MS
+      writeData(data)
+
+      const verifyUrl = buildEmailVerificationUrl(req, match.user.email || match.key, code)
+      const delivery = await sendEmailVerificationEmail({
+        to: match.user.email,
+        fullName: match.user.fullName || match.key,
+        code,
+        verifyUrl,
+      })
+
+      return res.json({
+        ok: true,
+        message: delivery.delivered
+          ? 'A new verification code was sent.'
+          : 'Email delivery is unavailable, but you can still verify with the code below in development.',
+        previewCode: delivery.delivered || isProduction ? undefined : code,
+      })
+    }
+
+    const user = await findDbUser(identifier)
+    if (!user || !user.email) {
+      return res.status(404).json({ error: 'account not found' })
+    }
+    if (isEmailVerified(user)) {
+      return res.json({ ok: true, message: 'Email is already verified.' })
+    }
+
+    const code = createResetCode()
+    user.emailVerificationCodeHash = hashResetCode(code)
+    user.emailVerificationExpiresAt = Date.now() + EMAIL_VERIFICATION_WINDOW_MS
+    await user.save()
+
+    const verifyUrl = buildEmailVerificationUrl(req, user.email || user.username, code)
+    const delivery = await sendEmailVerificationEmail({
+      to: user.email,
+      fullName: user.fullName || user.username,
+      code,
+      verifyUrl,
+    })
+
+    return res.json({
+      ok: true,
+      message: delivery.delivered
+        ? 'A new verification code was sent.'
+        : 'Email delivery is unavailable, but you can still verify with the code below in development.',
+      previewCode: delivery.delivered || isProduction ? undefined : code,
+    })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/email/verify', async (req, res) => {
+  const identifier = String(req.body?.identifier || '').trim()
+  const code = String(req.body?.code || '').trim()
+  if (!identifier || !code) {
+    return res.status(400).json({ error: 'identifier and verification code are required' })
+  }
+
+  try {
+    if (useFileStorage) {
+      const data = readData()
+      const match = findFileUser(data, identifier)
+      if (!match || !match.user.emailVerificationCodeHash) {
+        return res.status(400).json({ error: 'invalid or expired verification code' })
+      }
+
+      const codeHash = hashResetCode(code)
+      const expired = Number(match.user.emailVerificationExpiresAt || 0) < Date.now()
+      if (expired || match.user.emailVerificationCodeHash !== codeHash) {
+        return res.status(400).json({ error: 'invalid or expired verification code' })
+      }
+
+      match.user.emailVerified = true
+      delete match.user.emailVerificationCodeHash
+      delete match.user.emailVerificationExpiresAt
+      match.user.lastLoginAt = Date.now()
+      match.user.loginCount = Number(match.user.loginCount || 0) + 1
+      writeData(data)
+
+      const token = genToken(match.key)
+      return res.json({
+        ok: true,
+        message: 'Email verified. You are now signed in.',
+        username: match.key,
+        token,
+        account: buildAccount(match.user),
+      })
+    }
+
+    const user = await findDbUser(identifier)
+    if (!user || !user.emailVerificationCodeHash) {
+      return res.status(400).json({ error: 'invalid or expired verification code' })
+    }
+
+    const codeHash = hashResetCode(code)
+    const expired = Number(user.emailVerificationExpiresAt || 0) < Date.now()
+    if (expired || user.emailVerificationCodeHash !== codeHash) {
+      return res.status(400).json({ error: 'invalid or expired verification code' })
+    }
+
+    user.emailVerified = true
+    user.emailVerificationCodeHash = undefined
+    user.emailVerificationExpiresAt = undefined
+    user.lastLoginAt = Date.now()
+    user.loginCount = Number(user.loginCount || 0) + 1
+    await user.save()
+
+    const token = genToken(user.username)
+    return res.json({
+      ok: true,
+      message: 'Email verified. You are now signed in.',
+      username: user.username,
+      token,
+      account: buildAccount(user.toObject()),
+    })
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'server error' })
@@ -793,6 +1066,7 @@ app.post('/api/auth/google', async (req, res) => {
           password: '',
           googleId,
           authProvider: 'google',
+          emailVerified: true,
           created: Date.now(),
           lastLoginAt: Date.now(),
           loginCount: 0,
@@ -805,6 +1079,7 @@ app.post('/api/auth/google', async (req, res) => {
       user.emailLower = email
       user.googleId = googleId
       user.authProvider = user.password ? 'google+local' : 'google'
+      user.emailVerified = true
       user.lastLoginAt = Date.now()
       user.loginCount = Number(user.loginCount || 0) + 1
       writeData(data)
@@ -828,6 +1103,7 @@ app.post('/api/auth/google', async (req, res) => {
         password: '',
         googleId,
         authProvider: 'google',
+        emailVerified: true,
         created: Date.now(),
         lastLoginAt: Date.now(),
         loginCount: 1,
@@ -842,6 +1118,7 @@ app.post('/api/auth/google', async (req, res) => {
     user.emailLower = email
     user.googleId = googleId
     user.authProvider = user.password ? 'google+local' : 'google'
+    user.emailVerified = true
     user.lastLoginAt = Date.now()
     user.loginCount = Number(user.loginCount || 0) + 1
     await user.save()

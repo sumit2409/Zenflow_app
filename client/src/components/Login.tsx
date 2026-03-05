@@ -10,7 +10,7 @@ type Props = {
   onClose?: () => void
 }
 
-type AuthMode = 'login' | 'register' | 'forgot' | 'reset'
+type AuthMode = 'login' | 'register' | 'verify' | 'forgot' | 'reset'
 
 type FormState = {
   identifier: string
@@ -19,6 +19,7 @@ type FormState = {
   username: string
   password: string
   confirmPassword: string
+  verificationCode: string
   resetCode: string
   remember: boolean
 }
@@ -26,6 +27,7 @@ type FormState = {
 type AuthConfig = {
   google: { enabled: boolean; clientId: string | null }
   passwordResetEmail: { enabled: boolean }
+  emailVerification: { enabled: boolean }
 }
 
 const defaultForm: FormState = {
@@ -35,6 +37,7 @@ const defaultForm: FormState = {
   username: '',
   password: '',
   confirmPassword: '',
+  verificationCode: '',
   resetCode: '',
   remember: true,
 }
@@ -42,6 +45,7 @@ const defaultForm: FormState = {
 const defaultAuthConfig: AuthConfig = {
   google: { enabled: false, clientId: null },
   passwordResetEmail: { enabled: false },
+  emailVerification: { enabled: false },
 }
 
 const goalContent: Record<GoalIntent, { title: string; copy: string; checklist: string[] }> = {
@@ -127,6 +131,9 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
           passwordResetEmail: {
             enabled: Boolean(payload?.passwordResetEmail?.enabled),
           },
+          emailVerification: {
+            enabled: Boolean(payload?.emailVerification?.enabled),
+          },
         })
       } catch (configError) {
         console.error(configError)
@@ -149,6 +156,21 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
     }))
     setMode('reset')
     setInfo('Enter a new password to finish the reset.')
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('verify') !== '1') return
+
+    const identifier = params.get('identifier') || ''
+    const code = params.get('code') || ''
+    setForm((current) => ({
+      ...current,
+      identifier: identifier || current.identifier,
+      verificationCode: code || current.verificationCode,
+    }))
+    setMode('verify')
+    setInfo('Enter the verification code to activate your account.')
   }, [])
 
   useEffect(() => {
@@ -191,6 +213,7 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
       username: json?.username || form.username.trim(),
       fullName: json?.account?.fullName || form.fullName.trim() || json?.username || form.identifier.trim(),
       email: json?.account?.email || form.email.trim(),
+      emailVerified: Boolean(json?.account?.emailVerified),
       authProvider: json?.account?.authProvider,
       created: json?.account?.created || Date.now(),
       lastLoginAt: json?.account?.lastLoginAt || Date.now(),
@@ -220,6 +243,42 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
       }
 
       await completeLogin(json)
+    } catch (requestError) {
+      console.error(requestError)
+      setError('network error while contacting the auth server')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function resendVerificationCode() {
+    if (!form.identifier.trim()) {
+      setError('enter your email or username first')
+      return
+    }
+
+    setError(null)
+    setInfo(null)
+    setLoading(true)
+    try {
+      const response = await fetch(apiUrl('/api/email/verify/resend'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ identifier: form.identifier.trim() }),
+      })
+
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        setError(json?.error || `server error ${response.status}`)
+        return
+      }
+
+      if (json?.previewCode) {
+        updateField('verificationCode', json.previewCode)
+        setInfo(`Development preview code: ${json.previewCode}`)
+      } else {
+        setInfo(json?.message || 'A new verification code was sent.')
+      }
     } catch (requestError) {
       console.error(requestError)
       setError('network error while contacting the auth server')
@@ -279,6 +338,11 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
         setError('enter your email or username to recover your password')
         return
       }
+    } else if (mode === 'verify') {
+      if (!form.identifier.trim() || !form.verificationCode.trim()) {
+        setError('identifier and verification code are required')
+        return
+      }
     } else {
       if (!form.identifier.trim() || !form.resetCode.trim() || !form.password || !form.confirmPassword) {
         setError('identifier, reset code, and new password are required')
@@ -312,6 +376,27 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
           setInfo(json?.message || 'If that account exists, a password reset code has been prepared.')
         }
         setMode('reset')
+        return
+      }
+
+      if (mode === 'verify') {
+        const response = await fetch(apiUrl('/api/email/verify'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            identifier: form.identifier.trim(),
+            code: form.verificationCode.trim(),
+          }),
+        })
+
+        const json = await response.json().catch(() => null)
+        if (!response.ok) {
+          setError(json?.error || `server error ${response.status}`)
+          return
+        }
+
+        setInfo(json?.message || 'Email verified. You are now signed in.')
+        await completeLogin(json)
         return
       }
 
@@ -362,7 +447,31 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
 
       const json = await response.json().catch(() => null)
       if (!response.ok) {
+        if (json?.requiresEmailVerification) {
+          setForm((current) => ({
+            ...current,
+            identifier: json?.identifier || current.identifier || current.email,
+          }))
+          setInfo(json?.error || 'Verify your email before signing in.')
+          setMode('verify')
+          return
+        }
         setError(json?.error || `server error ${response.status}`)
+        return
+      }
+
+      if (mode === 'register' && json?.requiresEmailVerification) {
+        setForm((current) => ({
+          ...current,
+          identifier: json?.identifier || current.email,
+          verificationCode: json?.previewCode || current.verificationCode,
+          password: '',
+          confirmPassword: '',
+        }))
+        setInfo(json?.previewCode
+          ? `Account created. Development verification code: ${json.previewCode}`
+          : json?.message || 'Account created. Enter the verification code from your email.')
+        setMode('verify')
         return
       }
 
@@ -378,6 +487,7 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
   const titleByMode: Record<AuthMode, string> = {
     login: 'Welcome back.',
     register: 'Build your account.',
+    verify: 'Verify your email.',
     forgot: 'Recover your password.',
     reset: 'Set a new password.',
   }
@@ -385,6 +495,7 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
   const kickerByMode: Record<AuthMode, string> = {
     login: 'Sign in',
     register: 'Create account',
+    verify: 'Email verification',
     forgot: 'Password recovery',
     reset: 'Reset password',
   }
@@ -404,6 +515,8 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
             <strong>
               {mode === 'register'
                 ? 'New account'
+                : mode === 'verify'
+                  ? 'Verify email'
                 : mode === 'forgot'
                   ? 'Recovery request'
                   : mode === 'reset'
@@ -413,6 +526,8 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
             <span>
               {mode === 'register'
                 ? 'Create an account and start with a recommended setup.'
+                : mode === 'verify'
+                  ? 'Enter the code from your inbox to activate your account.'
                 : mode === 'forgot'
                   ? 'Request a reset code for the email on your account.'
                   : mode === 'reset'
@@ -483,7 +598,7 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
               </>
             )}
 
-            {(mode === 'login' || mode === 'forgot' || mode === 'reset') && (
+            {(mode === 'login' || mode === 'forgot' || mode === 'verify' || mode === 'reset') && (
               <label>
                 Email or username
                 <input
@@ -551,6 +666,31 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
               </>
             )}
 
+            {mode === 'verify' && (
+              <>
+                <label>
+                  Verification code
+                  <input
+                    autoComplete="one-time-code"
+                    placeholder="Enter the 6-digit code"
+                    value={form.verificationCode}
+                    onChange={(event) => updateField('verificationCode', event.target.value)}
+                  />
+                </label>
+                <div className="auth-help-card">
+                  <strong>Verify your account</strong>
+                  <p>
+                    Enter the code sent to your registration email. This protects accounts from fake signups and mistyped emails.
+                  </p>
+                  {!authConfig.emailVerification.enabled && (
+                    <p className="field-note">
+                      Email delivery is not configured yet on this environment, so development preview codes may be shown here for testing.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
             {mode === 'forgot' && (
               <div className="auth-help-card">
                 <strong>How recovery works</strong>
@@ -596,6 +736,8 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
                   ? 'Enter Zenflow'
                   : mode === 'register'
                     ? 'Create account'
+                    : mode === 'verify'
+                      ? 'Verify email'
                     : mode === 'forgot'
                       ? 'Send reset code'
                       : 'Save new password'}
@@ -617,6 +759,16 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
               {mode === 'reset' && (
                 <button type="button" className="auth-inline-link" onClick={() => switchMode('forgot')}>
                   Request another reset code
+                </button>
+              )}
+              {mode === 'verify' && (
+                <button type="button" className="auth-inline-link" onClick={() => void resendVerificationCode()} disabled={loading}>
+                  Resend verification code
+                </button>
+              )}
+              {mode === 'verify' && (
+                <button type="button" className="auth-inline-link" onClick={() => switchMode('login')}>
+                  Back to login
                 </button>
               )}
             </div>
