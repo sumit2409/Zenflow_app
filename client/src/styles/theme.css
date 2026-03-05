@@ -18,12 +18,12 @@
   --radius-lg: 30px;
   --space-1: 4px;
   --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-7: 32px;
-  --space-8: 40px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --space-7: 64px;
+  --space-8: 64px;
 }
 
 :root[data-theme='forest'] {
@@ -88,6 +88,8 @@ body {
   margin: 0;
   color: var(--ink);
   font-family: 'Manrope', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
   overflow-x: hidden;
   min-width: 320px;
   background:
@@ -137,12 +139,43 @@ select {
   position: relative;
   width: 100%;
   margin: 0 auto;
-  padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px calc(env(safe-area-inset-bottom, 0px) + 56px);
+  max-width: 1520px;
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px calc(env(safe-area-inset-bottom, 0px) + 88px);
 }
 
 main {
   display: grid;
-  gap: 18px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 24px;
+}
+
+main > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.caption,
+small {
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .app-header {
@@ -201,12 +234,13 @@ main {
 button {
   border: 1px solid rgba(79, 58, 41, 0.16);
   border-radius: 999px;
-  min-height: 44px;
+  min-height: 48px;
   padding: 10px 14px;
   background: rgba(255, 250, 246, 0.8);
   color: var(--ink);
   cursor: pointer;
-  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.18s ease-in-out, background 0.18s ease-in-out, border-color 0.18s ease-in-out, box-shadow 0.18s ease-in-out;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .nav-link {
@@ -223,6 +257,26 @@ button:hover {
   border-color: rgba(125, 149, 119, 0.4);
   background: rgba(255, 255, 255, 0.95);
   box-shadow: 0 12px 28px rgba(77, 49, 31, 0.08);
+}
+
+.nav-link:active,
+.login-btn:active,
+button:active {
+  transform: scale(0.98);
+}
+
+.header-search {
+  width: min(240px, 100%);
+  margin-left: auto;
+}
+
+.header-search input {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0 16px;
 }
 
 button:focus-visible,
@@ -769,7 +823,7 @@ button:disabled {
 .login-card,
 .feature-card {
   border: 1px solid var(--line);
-  border-radius: 30px;
+  border-radius: 16px;
   background: var(--card);
   box-shadow: var(--shadow);
   transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
@@ -779,8 +833,6 @@ button:disabled {
 .focus-card:hover,
 .login-card:hover,
 .feature-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 26px 80px rgba(77, 49, 31, 0.15);
   border-color: rgba(125, 149, 119, 0.22);
 }
 
@@ -811,6 +863,41 @@ button:disabled {
 .focus-card,
 .login-card {
   padding: 22px;
+}
+
+.bottom-nav {
+  display: none;
+}
+
+.bottom-nav-item {
+  position: relative;
+  overflow: hidden;
+  min-height: 52px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.bottom-nav-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 70%);
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.18s ease-in-out, transform 0.18s ease-in-out;
+}
+
+.bottom-nav-item:active::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.bottom-nav-item.active {
+  background: linear-gradient(135deg, rgba(125, 149, 119, 0.95), rgba(174, 131, 89, 0.95));
+  border-color: transparent;
+  color: #fff;
 }
 
 .reward-card {
@@ -2478,9 +2565,21 @@ input[type='date'],
   }
 }
 
+@media (max-width: 1199px) {
+  main {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 24px;
+  }
+}
+
 @media (max-width: 720px) {
   .app-root {
-    padding: calc(env(safe-area-inset-top, 0px) + 4px) 8px calc(env(safe-area-inset-bottom, 0px) + 92px);
+    padding: calc(env(safe-area-inset-top, 0px) + 6px) 10px calc(env(safe-area-inset-bottom, 0px) + 110px);
+  }
+
+  main {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
   }
 
   .app-header,
@@ -2553,6 +2652,11 @@ input[type='date'],
     width: 100%;
     justify-content: space-between;
     margin-left: 0;
+  }
+
+  .nav,
+  .header-search {
+    display: none;
   }
 
   .marketing-page-nav {
@@ -2721,6 +2825,40 @@ input[type='date'],
     bottom: 12px;
     transform: scale(0.82);
     transform-origin: bottom right;
+  }
+}
+
+@media (max-width: 767px) {
+  .bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 65;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px 10px calc(env(safe-area-inset-bottom, 0px) + 10px);
+    background: rgba(243, 234, 223, 0.95);
+    border-top: 1px solid var(--line);
+    backdrop-filter: blur(10px);
+  }
+
+  .bottom-nav-item {
+    padding: 8px 6px;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+  }
+}
+
+@media (hover: hover) {
+  .card:hover,
+  .focus-card:hover,
+  .login-card:hover,
+  .feature-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 26px 80px rgba(77, 49, 31, 0.15);
+    border-color: rgba(125, 149, 119, 0.22);
   }
 }
 

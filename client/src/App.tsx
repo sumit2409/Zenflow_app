@@ -63,6 +63,8 @@ function formatDateLabel(value: number | string | null | undefined) {
 export default function App() {
   const initialSession = readStoredSession()
   const [selected, setSelected] = useState<string | null>(null)
+  const [lastToolView, setLastToolView] = useState<'pomodoro' | 'meditation' | 'sudoku' | 'arcade'>('pomodoro')
+  const [navSearch, setNavSearch] = useState('')
   const [account, setAccount] = useState<AuthAccount | null>(initialSession?.account || null)
   const [token, setToken] = useState<string | null>(initialSession?.token || null)
   const [profileMeta, setProfileMeta] = useState<ProfileMeta>({})
@@ -77,6 +79,18 @@ export default function App() {
 
   const user = account?.username || null
   const guestLandingMode = !account && !selected
+  const toolViews = ['pomodoro', 'meditation', 'sudoku', 'arcade'] as const
+  const isToolSelected = Boolean(selected && toolViews.includes(selected as (typeof toolViews)[number]))
+  const desktopNavItems: Array<{ id: string | null; label: string }> = [
+    { id: null, label: 'Dashboard' },
+    { id: 'pomodoro', label: 'Focus Timer' },
+    { id: 'meditation', label: 'Meditation' },
+    { id: 'sudoku', label: 'Sudoku' },
+    { id: 'arcade', label: 'Games' },
+    { id: 'planner', label: 'Planner' },
+    { id: 'profile', label: 'Account' },
+  ]
+  const visibleDesktopNav = desktopNavItems.filter((item) => item.label.toLowerCase().includes(navSearch.trim().toLowerCase()))
 
   useEffect(() => {
     async function validateSession() {
@@ -174,6 +188,12 @@ export default function App() {
 
   const setView = (view: string | null) => setSelected(view)
 
+  useEffect(() => {
+    if (selected === 'pomodoro' || selected === 'meditation' || selected === 'sudoku' || selected === 'arcade') {
+      setLastToolView(selected)
+    }
+  }, [selected])
+
   function openPlannerAt(dateKey: string) {
     setPlannerFocusDate(dateKey)
     setSelected('planner')
@@ -192,6 +212,42 @@ export default function App() {
     setProfileRefreshKey(0)
     setGoalIntent(null)
     clearStoredSession()
+  }
+
+  function handleBottomNav(section: 'home' | 'dashboard' | 'tools' | 'activity' | 'profile') {
+    if (section === 'home') {
+      setSelected(null)
+      return
+    }
+    if (section === 'dashboard') {
+      if (!account) {
+        openAuth('login')
+        return
+      }
+      setSelected(null)
+      return
+    }
+    if (section === 'tools') {
+      if (!account) {
+        openAuth('login', 'focus')
+        return
+      }
+      setSelected(lastToolView)
+      return
+    }
+    if (section === 'activity') {
+      if (!account) {
+        openAuth('login', 'consistency')
+        return
+      }
+      setSelected('planner')
+      return
+    }
+    if (!account) {
+      openAuth('login')
+      return
+    }
+    setSelected('profile')
   }
 
   const profile = profileMeta.profile || {}
@@ -242,14 +298,22 @@ export default function App() {
         </div>
         {(account || selected) && (
           <nav className="nav" aria-label="Main navigation">
-            <button className={`nav-link ${selected === null ? 'active' : ''}`} onClick={() => setView(null)}>Dashboard</button>
-            <button className={`nav-link ${selected === 'pomodoro' ? 'active' : ''}`} onClick={() => setView('pomodoro')}>Focus Timer</button>
-            <button className={`nav-link ${selected === 'meditation' ? 'active' : ''}`} onClick={() => setView('meditation')}>Meditation</button>
-            <button className={`nav-link ${selected === 'sudoku' ? 'active' : ''}`} onClick={() => setView('sudoku')}>Sudoku</button>
-            <button className={`nav-link ${selected === 'arcade' ? 'active' : ''}`} onClick={() => setView('arcade')}>Games</button>
-            <button className={`nav-link ${selected === 'planner' ? 'active' : ''}`} onClick={() => setView('planner')}>Planner</button>
-            <button className={`nav-link ${selected === 'profile' ? 'active' : ''}`} onClick={() => setView('profile')}>Account</button>
+            {visibleDesktopNav.map((item) => (
+              <button key={item.label} className={`nav-link ${selected === item.id ? 'active' : ''}`} onClick={() => setView(item.id)}>
+                {item.label}
+              </button>
+            ))}
           </nav>
+        )}
+        {(account || selected) && (
+          <label className="header-search" aria-label="Search navigation">
+            <input
+              type="search"
+              placeholder="Search section"
+              value={navSearch}
+              onChange={(event) => setNavSearch(event.target.value)}
+            />
+          </label>
         )}
         <div className={`auth ${guestLandingMode ? 'guest-auth' : ''}`}>
           {account ? (
@@ -374,6 +438,23 @@ export default function App() {
           />
         </div>
       )}
+      <nav className="bottom-nav" aria-label="Primary navigation">
+        <button className={`bottom-nav-item ${!account && selected === null ? 'active' : ''}`} onClick={() => handleBottomNav('home')}>
+          <span>Home</span>
+        </button>
+        <button className={`bottom-nav-item ${account && selected === null ? 'active' : ''}`} onClick={() => handleBottomNav('dashboard')}>
+          <span>Dashboard</span>
+        </button>
+        <button className={`bottom-nav-item ${isToolSelected ? 'active' : ''}`} onClick={() => handleBottomNav('tools')}>
+          <span>Tools</span>
+        </button>
+        <button className={`bottom-nav-item ${selected === 'planner' ? 'active' : ''}`} onClick={() => handleBottomNav('activity')}>
+          <span>Activity</span>
+        </button>
+        <button className={`bottom-nav-item ${selected === 'profile' ? 'active' : ''}`} onClick={() => handleBottomNav('profile')}>
+          <span>Profile</span>
+        </button>
+      </nav>
     </div>
   )
 }
