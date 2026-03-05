@@ -26,6 +26,7 @@ const SMTP_RESET_BCC = String(process.env.SMTP_RESET_BCC || '').trim()
 const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim()
 const RESEND_FROM = String(process.env.RESEND_FROM || SMTP_FROM || '').trim()
 const ADMIN_BROADCAST_KEY = String(process.env.ADMIN_BROADCAST_KEY || '').trim()
+const DEFAULT_APK_DIRECT_URL = 'https://raw.githubusercontent.com/sumit2409/Zenflow_app/main/downloads/zenflow-app.apk'
 const DEFAULT_APK_FALLBACK_URL = 'https://github.com/sumit2409/Zenflow_app/releases'
 const APK_DOWNLOAD_URL = String(process.env.APK_DOWNLOAD_URL || '').trim()
 
@@ -377,27 +378,29 @@ async function sendEmailVerificationEmail({ to, fullName, code, verifyUrl }) {
 
 function buildCommunityAnnouncementEmail({ fullName, downloadUrl }) {
   const safeName = sanitizeFullName(fullName) || 'there'
+  const websiteUrl = PUBLIC_APP_URL || 'https://zenflow.bio'
   return {
-    subject: 'Zenflow Android app update: thank you for your support',
+    subject: 'Zenflow Android app update for our earliest community members',
     text: [
-      `Hi ${safeName},`,
+      `Hi cuties (${safeName}),`,
       '',
       'We are excited to share our new and updated Zenflow Android app release.',
+      `Website: ${websiteUrl}`,
+      `Android app download: ${downloadUrl}`,
       '',
-      'Thank you for being part of our growing community and supporting us in our fight against brain rot.',
-      'Feel free to spread the word so more people can use our free resources.',
-      '',
-      `Download the latest Android app: ${downloadUrl}`,
+      'You are the earliest members of our fastly growing community of users.',
+      'We rely on your input, and we rely on you to spread the word and share feedback.',
       '',
       'Have a nice day,',
       'Sumit Tiwari',
     ].join('\n'),
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#2f241e">
-        <p>Hi ${safeName},</p>
+        <p>Hi cuties (${safeName}),</p>
         <p>We are excited to share our new and updated Zenflow Android app release.</p>
-        <p>Thank you for being part of our growing community and supporting us in our fight against brain rot.<br />Feel free to spread the word so more people can use our free resources.</p>
+        <p><a href="${websiteUrl}">Visit our website</a></p>
         <p><a href="${downloadUrl}">Download the latest Android app</a></p>
+        <p>You are the earliest members of our fastly growing community of users.<br />We rely on your input, and we rely on you to spread the word and share feedback.</p>
         <p>Have a nice day,<br />Sumit Tiwari</p>
       </div>
     `,
@@ -646,7 +649,7 @@ app.post('/api/admin/announce/android-release', async (req, res) => {
   const limitRaw = Number(req.body?.limit || 0)
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : null
   const onlyRaw = String(req.body?.only || '').trim().toLowerCase()
-  const downloadUrl = `${PUBLIC_APP_URL || 'https://zenflow.bio'}/download/android`
+  const downloadUrl = APK_DOWNLOAD_URL || DEFAULT_APK_DIRECT_URL
 
   try {
     let recipients = []
