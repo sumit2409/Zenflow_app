@@ -25,6 +25,7 @@ const SMTP_FROM = String(process.env.SMTP_FROM || SMTP_USER || '').trim()
 const SMTP_RESET_BCC = String(process.env.SMTP_RESET_BCC || '').trim()
 const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim()
 const RESEND_FROM = String(process.env.RESEND_FROM || SMTP_FROM || '').trim()
+const ADMIN_BROADCAST_KEY = String(process.env.ADMIN_BROADCAST_KEY || '').trim()
 const DEFAULT_APK_FALLBACK_URL = 'https://github.com/sumit2409/Zenflow_app/releases'
 const APK_DOWNLOAD_URL = String(process.env.APK_DOWNLOAD_URL || '').trim()
 
@@ -262,7 +263,7 @@ function buildEmailVerificationEmail({ fullName, code, verifyUrl }) {
   }
 }
 
-async function sendTransactionalEmail({ to, subject, text, html }) {
+async function sendTransactionalEmail({ to, subject, text, html, preferredProvider = 'auto' }) {
   const recipients = Array.isArray(to) ? to : [to]
   const normalizedRecipients = Array.from(
     new Set(
@@ -334,6 +335,16 @@ async function sendTransactionalEmail({ to, subject, text, html }) {
     }
   }
 
+  if (preferredProvider === 'resend') {
+    const resendResult = await sendViaResend()
+    return { delivered: resendResult.delivered, provider: 'resend' }
+  }
+
+  if (preferredProvider === 'smtp') {
+    const smtpResult = await sendViaSmtp()
+    return { delivered: smtpResult.delivered, provider: 'smtp' }
+  }
+
   const resendResult = await sendViaResend()
   if (resendResult.delivered) return { delivered: true, provider: 'resend' }
   const smtpResult = await sendViaSmtp()
@@ -361,6 +372,46 @@ async function sendEmailVerificationEmail({ to, fullName, code, verifyUrl }) {
     subject: mail.subject,
     text: mail.text,
     html: mail.html,
+  })
+}
+
+function buildCommunityAnnouncementEmail({ fullName, downloadUrl }) {
+  const safeName = sanitizeFullName(fullName) || 'there'
+  return {
+    subject: 'Zenflow Android app update: thank you for your support',
+    text: [
+      `Hi ${safeName},`,
+      '',
+      'We are excited to share our new and updated Zenflow Android app release.',
+      '',
+      'Thank you for being part of our growing community and supporting us in our fight against brain rot.',
+      'Feel free to spread the word so more people can use our free resources.',
+      '',
+      `Download the latest Android app: ${downloadUrl}`,
+      '',
+      'Have a nice day,',
+      'Sumit Tiwari',
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#2f241e">
+        <p>Hi ${safeName},</p>
+        <p>We are excited to share our new and updated Zenflow Android app release.</p>
+        <p>Thank you for being part of our growing community and supporting us in our fight against brain rot.<br />Feel free to spread the word so more people can use our free resources.</p>
+        <p><a href="${downloadUrl}">Download the latest Android app</a></p>
+        <p>Have a nice day,<br />Sumit Tiwari</p>
+      </div>
+    `,
+  }
+}
+
+async function sendCommunityAnnouncementEmail({ to, fullName, preferredProvider = 'auto', downloadUrl }) {
+  const mail = buildCommunityAnnouncementEmail({ fullName, downloadUrl })
+  return sendTransactionalEmail({
+    to,
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html,
+    preferredProvider,
   })
 }
 
@@ -582,6 +633,97 @@ async function findDbUser(identifier) {
     $or: [{ usernameLower: lowered }, { emailLower: lowered }, { username: normalized }],
   }).exec()
 }
+
+app.post('/api/admin/announce/android-release', async (req, res) => {
+  const incomingKey = String(req.headers['x-admin-key'] || req.body?.adminKey || '').trim()
+  if (!ADMIN_BROADCAST_KEY || incomingKey !== ADMIN_BROADCAST_KEY) {
+    return res.status(401).json({ error: 'unauthorized' })
+  }
+
+  const provider = String(req.body?.provider || 'resend').trim().toLowerCase()
+  const preferredProvider = provider === 'smtp' ? 'smtp' : provider === 'resend' ? 'resend' : 'auto'
+  const dryRun = Boolean(req.body?.dryRun)
+  const limitRaw = Number(req.body?.limit || 0)
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : null
+  const onlyRaw = String(req.body?.only || '').trim().toLowerCase()
+  const downloadUrl = `${PUBLIC_APP_URL || 'https://zenflow.bio'}/download/android`
+
+  try {
+    let recipients = []
+
+    if (onlyRaw) {
+      recipients = [{ email: onlyRaw, fullName: onlyRaw.split('@')[0] || 'there' }]
+    } else if (useFileStorage) {
+      const data = readData()
+      recipients = Object.values(data.users || {})
+        .map((user) => ({
+          email: String(user.email || user.emailLower || '').trim().toLowerCase(),
+          fullName: sanitizeFullName(user.fullName || user.username || ''),
+        }))
+        .filter((user) => Boolean(user.email))
+    } else {
+      const users = await User.find({ email: { $exists: true, $ne: '' } })
+        .select({ email: 1, fullName: 1, username: 1 })
+        .lean()
+        .exec()
+      recipients = users.map((user) => ({
+        email: String(user.email || '').trim().toLowerCase(),
+        fullName: sanitizeFullName(user.fullName || user.username || ''),
+      }))
+    }
+
+    const deduped = []
+    const seen = new Set()
+    for (const recipient of recipients) {
+      if (!recipient.email || seen.has(recipient.email)) continue
+      seen.add(recipient.email)
+      deduped.push(recipient)
+    }
+    const finalRecipients = limit ? deduped.slice(0, limit) : deduped
+
+    if (dryRun) {
+      return res.json({
+        ok: true,
+        dryRun: true,
+        provider: preferredProvider,
+        totalRecipients: finalRecipients.length,
+        recipients: finalRecipients.slice(0, 25).map((item) => item.email),
+      })
+    }
+
+    const sent = []
+    const failed = []
+    for (const recipient of finalRecipients) {
+      try {
+        const result = await sendCommunityAnnouncementEmail({
+          to: recipient.email,
+          fullName: recipient.fullName || 'there',
+          preferredProvider,
+          downloadUrl,
+        })
+        if (!result.delivered) {
+          failed.push({ email: recipient.email, reason: `${result.provider || preferredProvider} delivery failed` })
+          continue
+        }
+        sent.push({ email: recipient.email, provider: result.provider || preferredProvider })
+      } catch (error) {
+        failed.push({ email: recipient.email, reason: error?.message || 'send failed' })
+      }
+    }
+
+    return res.json({
+      ok: true,
+      provider: preferredProvider,
+      totalRecipients: finalRecipients.length,
+      sent: sent.length,
+      failed: failed.length,
+      failures: failed.slice(0, 25),
+    })
+  } catch (error) {
+    console.error('Announcement API failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
 
 app.post('/api/register', async (req, res) => {
   const validation = validateRegistration(req.body || {})

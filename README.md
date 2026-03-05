@@ -72,6 +72,15 @@ Useful flags:
 - `--provider=resend` (force Resend only)
 - `--provider=smtp` (force SMTP only)
 
+Trigger announcement by HTTPS (no shell) using the protected admin endpoint:
+
+```bash
+curl -X POST https://your-domain.com/api/admin/announce/android-release \
+  -H "Content-Type: application/json" \
+  -H "x-admin-key: YOUR_ADMIN_BROADCAST_KEY" \
+  -d "{\"provider\":\"resend\",\"dryRun\":false}"
+```
+
 ## Render full app deploy
 
 This repo can now be deployed to Render as a single Node web service that serves:
@@ -108,6 +117,7 @@ Optional auth environment variables:
 - `RESEND_API_KEY`
 - `RESEND_FROM`
 - `APK_DOWNLOAD_URL` (optional direct APK URL used by `/download/android`)
+- `ADMIN_BROADCAST_KEY` (required for protected broadcast API endpoint)
 
 If `GOOGLE_CLIENT_ID` is set, the login screen shows Google Sign-In. If the SMTP settings are set, Zenflow can email password reset codes and recovery links.
 If `RESEND_API_KEY` and `RESEND_FROM` are set, password reset emails are sent via Resend API first, with SMTP as fallback.
