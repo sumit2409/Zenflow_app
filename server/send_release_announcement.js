@@ -26,8 +26,10 @@ const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
 const limitArg = args.find((arg) => arg.startsWith('--limit='))
 const onlyArg = args.find((arg) => arg.startsWith('--only='))
+const providerArg = args.find((arg) => arg.startsWith('--provider='))
 const limit = limitArg ? Math.max(1, Number(limitArg.split('=')[1])) : null
 const onlyEmail = onlyArg ? String(onlyArg.split('=')[1] || '').trim().toLowerCase() : ''
+const forcedProvider = providerArg ? String(providerArg.split('=')[1] || '').trim().toLowerCase() : ''
 
 const subject = 'Zenflow Android app update: thank you for your support'
 const makeText = (name) => [
@@ -106,18 +108,24 @@ async function sendViaSmtp(to, name) {
 }
 
 async function sendAnnouncement(to, name) {
-  try {
-    const resendSent = await sendViaResend(to, name)
-    if (resendSent) return 'resend'
-  } catch (error) {
-    console.error(`Resend failed for ${to}:`, error.message)
-  }
+  const flow = forcedProvider === 'resend'
+    ? ['resend']
+    : forcedProvider === 'smtp'
+      ? ['smtp']
+      : ['resend', 'smtp']
 
-  try {
-    const smtpSent = await sendViaSmtp(to, name)
-    if (smtpSent) return 'smtp'
-  } catch (error) {
-    console.error(`SMTP failed for ${to}:`, error.message)
+  for (const provider of flow) {
+    try {
+      if (provider === 'resend') {
+        const resendSent = await sendViaResend(to, name)
+        if (resendSent) return 'resend'
+      } else {
+        const smtpSent = await sendViaSmtp(to, name)
+        if (smtpSent) return 'smtp'
+      }
+    } catch (error) {
+      console.error(`${provider.toUpperCase()} failed for ${to}:`, error.message)
+    }
   }
 
   throw new Error('No delivery provider succeeded')
@@ -133,30 +141,34 @@ function displayName(user) {
 }
 
 async function run() {
-  if (!MONGODB_URI) {
-    throw new Error('MONGODB_URI is missing')
+  let finalUsers = []
+
+  if (onlyEmail) {
+    finalUsers = [{ email: onlyEmail, fullName: 'there', username: onlyEmail.split('@')[0] }]
+    console.log('Using direct recipient mode (--only), skipping MongoDB lookup.')
+  } else {
+    if (!MONGODB_URI) {
+      throw new Error('MONGODB_URI is missing')
+    }
+
+    await mongoose.connect(MONGODB_URI)
+    const users = await User.find({
+      email: { $exists: true, $ne: '' },
+    }).lean()
+
+    const uniqueUsers = []
+    const seen = new Set()
+    for (const user of users) {
+      const email = String(user.email || user.emailLower || '').trim().toLowerCase()
+      if (!email || seen.has(email)) continue
+      seen.add(email)
+      uniqueUsers.push({ ...user, email })
+    }
+
+    finalUsers = limit ? uniqueUsers.slice(0, limit) : uniqueUsers
+    console.log(`Users found: ${uniqueUsers.length}`)
   }
 
-  await mongoose.connect(MONGODB_URI)
-  const users = await User.find({
-    email: { $exists: true, $ne: '' },
-  }).lean()
-
-  const uniqueUsers = []
-  const seen = new Set()
-  for (const user of users) {
-    const email = String(user.email || user.emailLower || '').trim().toLowerCase()
-    if (!email || seen.has(email)) continue
-    seen.add(email)
-    uniqueUsers.push({ ...user, email })
-  }
-
-  const scopedUsers = onlyEmail
-    ? uniqueUsers.filter((user) => user.email === onlyEmail)
-    : uniqueUsers
-  const finalUsers = limit ? scopedUsers.slice(0, limit) : scopedUsers
-
-  console.log(`Users found: ${uniqueUsers.length}`)
   console.log(`Users selected: ${finalUsers.length}`)
   if (dryRun) {
     console.log('Dry run mode enabled. No emails will be sent.')

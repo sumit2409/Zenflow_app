@@ -69,6 +69,8 @@ Useful flags:
 - `--dry-run`
 - `--limit=50`
 - `--only=user@example.com`
+- `--provider=resend` (force Resend only)
+- `--provider=smtp` (force SMTP only)
 
 ## Render full app deploy
 
