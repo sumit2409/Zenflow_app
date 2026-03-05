@@ -69,7 +69,7 @@ const faqs = [
 
 export default function MarketingLanding({ onOpenAuth }: Props) {
   const [selectedGoal, setSelectedGoal] = useState<GoalIntent>('focus')
-  const androidAppUrl = (import.meta.env.VITE_ANDROID_APK_URL || 'https://github.com/sumit2409/Zenflow_app/releases/latest/download/zenflow-app.apk').trim()
+  const androidAppUrl = (import.meta.env.VITE_ANDROID_APK_URL || 'https://github.com/sumit2409/Zenflow_app/releases').trim()
   const selectedPlan = useMemo(
     () => goalOptions.find((goal) => goal.id === selectedGoal) || goalOptions[0],
     [selectedGoal],
