@@ -25,6 +25,7 @@ type Props = {
   user: string | null
   token?: string | null
   onRequireLogin?: () => void
+  onOpenFocusTask?: (taskId: string) => void
   onMetaSaved?: () => void
 }
 
@@ -96,7 +97,7 @@ function getDaySummary(dateKey: string, planner: PlannerMeta | undefined) {
   }
 }
 
-export default function PlannerBoard({ initialDate, user, token, onRequireLogin, onMetaSaved }: Props) {
+export default function PlannerBoard({ initialDate, user, token, onRequireLogin, onOpenFocusTask, onMetaSaved }: Props) {
   const [meta, setMeta] = useState<ProfileMeta>({})
   const [selectedDate, setSelectedDate] = useState(initialDate || todayKey())
   const [calendarMode, setCalendarMode] = useState<CalendarMode>('week')
@@ -185,6 +186,7 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
     const existing = targetTodos.find((todo) => todo.linkedPlannerTaskId === task.id)
     if (existing) {
       setSaveMessage('This planner task is already linked to the focus timer.')
+      onOpenFocusTask?.(existing.id)
       return
     }
 
@@ -205,6 +207,7 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
     await persistPlanner(planner, `Linked "${task.title}" to the focus timer for ${formatPlannerDate(dateKey)}.`, {
       todosByDate: nextTodosByDate,
     })
+    onOpenFocusTask?.(linkedTodo.id)
   }
 
   async function toggleEntry(taskId: string, completed: boolean) {

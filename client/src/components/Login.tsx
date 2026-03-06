@@ -107,6 +107,8 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [verificationAllowed, setVerificationAllowed] = useState(false)
+  const [verificationCooldown, setVerificationCooldown] = useState(0)
   const [authConfig, setAuthConfig] = useState<AuthConfig>(defaultAuthConfig)
   const [googleReady, setGoogleReady] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -115,6 +117,9 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
 
   useEffect(() => {
     setMode(initialMode)
+    if (initialMode !== 'register') {
+      setVerificationAllowed(false)
+    }
   }, [initialMode])
 
   useEffect(() => {
@@ -177,9 +182,19 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
       identifier: identifier || current.identifier,
       verificationCode: code || current.verificationCode,
     }))
+    setVerificationAllowed(true)
     setMode('verify')
     setInfo('Enter the verification code to activate your account.')
   }, [])
+
+  useEffect(() => {
+    if (verificationCooldown <= 0) return
+    const timer = window.setInterval(() => {
+      setVerificationCooldown((value) => Math.max(0, value - 1))
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [verificationCooldown])
 
   useEffect(() => {
     const clientId = authConfig.google.clientId
@@ -210,6 +225,10 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
   }
 
   function switchMode(nextMode: AuthMode) {
+    if (nextMode === 'verify' && !verificationAllowed) {
+      setError('Email verification is only available after registration.')
+      return
+    }
     setError(null)
     setInfo(null)
     setLoading(false)
@@ -260,6 +279,10 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
   }
 
   async function resendVerificationCode() {
+    if (verificationCooldown > 0) {
+      setInfo(`Please wait ${verificationCooldown}s before requesting another code.`)
+      return
+    }
     if (!form.identifier.trim()) {
       setError('enter your email or username first')
       return
@@ -285,8 +308,9 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
         updateField('verificationCode', json.previewCode)
         setInfo(`Development preview code: ${json.previewCode}`)
       } else {
-        setInfo(json?.message || 'A new verification code was sent.')
+        setInfo(json?.message || 'A new verification code was sent. Check your inbox.')
       }
+      setVerificationCooldown(45)
     } catch (requestError) {
       console.error(requestError)
       setError('network error while contacting the auth server')
@@ -456,12 +480,7 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
       const json = await response.json().catch(() => null)
       if (!response.ok) {
         if (json?.requiresEmailVerification) {
-          setForm((current) => ({
-            ...current,
-            identifier: json?.identifier || current.identifier || current.email,
-          }))
-          setInfo(json?.error || 'Verify your email before signing in.')
-          setMode('verify')
+          setError(json?.error || 'Your account is not verified yet. Please use the verification email sent during registration.')
           return
         }
         setError(json?.error || `server error ${response.status}`)
@@ -476,9 +495,11 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
           password: '',
           confirmPassword: '',
         }))
+        setVerificationAllowed(true)
+        setVerificationCooldown(45)
         setInfo(json?.previewCode
           ? `Account created. Development verification code: ${json.previewCode}`
-          : json?.message || 'Account created. Enter the verification code from your email.')
+          : json?.message || 'Account created. Check your email for the verification code, then enter it here.')
         setMode('verify')
         return
       }
@@ -572,9 +593,6 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
               <div className="auth-quick-actions">
                 <button type="button" className="auth-inline-link" onClick={() => switchMode('forgot')}>
                   Forgot password?
-                </button>
-                <button type="button" className="auth-inline-link" onClick={() => switchMode('verify')}>
-                  Verify account
                 </button>
               </div>
             )}
@@ -784,12 +802,7 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
                   Forgot password?
                 </button>
               )}
-              {mode === 'login' && (
-                <button type="button" className="auth-inline-link" onClick={() => switchMode('verify')}>
-                  Verify account
-                </button>
-              )}
-              {mode === 'register' && (
+              {mode === 'register' && verificationAllowed && (
                 <button type="button" className="auth-inline-link" onClick={() => switchMode('verify')}>
                   Already have a code? Verify
                 </button>
@@ -805,8 +818,13 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
                 </button>
               )}
               {mode === 'verify' && (
-                <button type="button" className="auth-inline-link" onClick={() => void resendVerificationCode()} disabled={loading}>
-                  Resend verification code
+                <button
+                  type="button"
+                  className="auth-inline-link"
+                  onClick={() => void resendVerificationCode()}
+                  disabled={loading || verificationCooldown > 0}
+                >
+                  {verificationCooldown > 0 ? `Resend in ${verificationCooldown}s` : 'Resend verification code'}
                 </button>
               )}
               {mode === 'verify' && (

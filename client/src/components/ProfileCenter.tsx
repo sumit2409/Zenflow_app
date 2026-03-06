@@ -3,7 +3,13 @@ import { todayKey } from '../utils/wellness'
 import { type ProfileMeta, type TodoItem } from '../utils/profile'
 import { apiUrl } from '../utils/api'
 
-type Props = { user: string | null; token?: string | null; onRequireLogin?: () => void; onMetaSaved?: () => void }
+type Props = {
+  user: string | null
+  token?: string | null
+  onRequireLogin?: () => void
+  onOpenFocusTask?: (taskId: string) => void
+  onMetaSaved?: () => void
+}
 type ThemeOption = 'sand' | 'forest' | 'ocean' | 'sunset'
 
 const themeOptions: Array<{ id: ThemeOption; label: string; note: string }> = [
@@ -13,7 +19,7 @@ const themeOptions: Array<{ id: ThemeOption; label: string; note: string }> = [
   { id: 'sunset', label: 'Sunset', note: 'Muted coral background' },
 ]
 
-export default function ProfileCenter({ user, token, onRequireLogin, onMetaSaved }: Props) {
+export default function ProfileCenter({ user, token, onRequireLogin, onOpenFocusTask, onMetaSaved }: Props) {
   const today = todayKey()
   const [meta, setMeta] = useState<ProfileMeta>({})
   const [profile, setProfile] = useState({ heightCm: '', weightKg: '', dateOfBirth: '' })
@@ -217,15 +223,24 @@ export default function ProfileCenter({ user, token, onRequireLogin, onMetaSaved
                 .slice()
                 .sort((left, right) => Number(left.done) - Number(right.done))
                 .map((todo) => (
-                <label key={todo.id} className={`todo-item dashboard postit-note ${todo.done ? 'done' : ''}`}>
-                  <input type="checkbox" checked={todo.done} onChange={() => toggleTodo(todo.id)} />
-                  <div>
-                    <span>{todo.text}</span>
-                    <div className="muted">Focus blocks logged: {todo.focusCount || 0}</div>
-                    <div className="muted">Pomodoro target: {todo.completedPomodoros || 0}/{Math.max(1, todo.assignedPomodoros || 1)}</div>
+                  <div key={todo.id} className={`todo-item dashboard postit-note ${todo.done ? 'done' : ''}`}>
+                    <label className="check-row">
+                      <input type="checkbox" checked={todo.done} onChange={() => toggleTodo(todo.id)} />
+                      <div>
+                        <span>{todo.text}</span>
+                        <div className="muted">Focus blocks logged: {todo.focusCount || 0}</div>
+                        <div className="muted">Pomodoro target: {todo.completedPomodoros || 0}/{Math.max(1, todo.assignedPomodoros || 1)}</div>
+                      </div>
+                    </label>
+                    <div className="todo-item-actions">
+                      {!todo.done && (
+                        <button className="ghost-btn" onClick={() => onOpenFocusTask?.(todo.id)}>
+                          Open in focus
+                        </button>
+                      )}
+                      <button className="ghost-btn" onClick={() => removeTodo(todo.id)}>Remove</button>
+                    </div>
                   </div>
-                  <button className="ghost-btn" onClick={() => removeTodo(todo.id)}>Remove</button>
-                </label>
                 ))
             )}
           </div>

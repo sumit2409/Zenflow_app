@@ -15,6 +15,18 @@ import type { ProfileMeta } from './utils/profile'
 import PlannerBoard from './components/PlannerBoard'
 import { schedulePlannerNotifications } from './utils/planner'
 import { todayKey } from './utils/wellness'
+import {
+  type StaticPageId,
+  SiteFooterLinks,
+  staticPageMeta,
+  PrivacyPolicyPage,
+  TermsOfServicePage,
+  CookiePolicyPage,
+  AboutPage,
+  FAQPage,
+  ContactPage,
+  InfoPageBreadcrumb,
+} from './components/StaticPages'
 
 const LOCAL_SESSION_KEY = 'zenflow_session'
 const TEMP_SESSION_KEY = 'zenflow_session_temp'
@@ -67,11 +79,27 @@ function formatDateLabel(value: number | string | null | undefined) {
   })
 }
 
+const STATIC_PAGES: readonly StaticPageId[] = ['privacy', 'terms', 'cookie', 'about', 'contact', 'faq']
+
+function resolveStaticPage(hash: string): StaticPageId | null {
+  if (!hash.startsWith('#/')) return null
+  const trimmed = hash.replace(/^#\//, '').replace(/\/+$/, '').toLowerCase()
+  return STATIC_PAGES.includes(trimmed as StaticPageId) ? (trimmed as StaticPageId) : null
+}
+
+function setDescriptionMeta(content: string) {
+  const metaTag = document.querySelector('meta[name="description"]')
+  if (metaTag) {
+    metaTag.setAttribute('content', content)
+  }
+}
+
 export default function App() {
   const initialSession = readStoredSession()
   const [selected, setSelected] = useState<string | null>(null)
   const [lastToolView, setLastToolView] = useState<'pomodoro' | 'meditation' | 'sudoku' | 'arcade' | 'breakroom'>('pomodoro')
   const [lastSessionMinutes, setLastSessionMinutes] = useState(25)
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
   const [navSearch, setNavSearch] = useState('')
   const [account, setAccount] = useState<AuthAccount | null>(initialSession?.account || null)
   const [token, setToken] = useState<string | null>(initialSession?.token || null)
@@ -83,6 +111,7 @@ export default function App() {
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [goalIntent, setGoalIntent] = useState<GoalIntent | null>(null)
+  const [activeStaticPage, setActiveStaticPage] = useState<StaticPageId | null>(resolveStaticPage(window.location.hash))
   const [plannerFocusDate, setPlannerFocusDate] = useState(todayKey())
   const [penguinOffset, setPenguinOffset] = useState({ x: 0, y: 0 })
   const [penguinHopping, setPenguinHopping] = useState(false)
@@ -109,6 +138,27 @@ export default function App() {
   function showToast(msg: string) {
     setToastMsg(msg)
     window.setTimeout(() => setToastMsg(null), 3000)
+  }
+
+  function clearStaticRoute() {
+    if (window.location.hash.startsWith('#/')) {
+      window.location.hash = ''
+    }
+    setActiveStaticPage(null)
+  }
+
+  function openStaticPage(page: StaticPageId) {
+    setActiveStaticPage(page)
+    setSelected(null)
+    setFocusedTaskId(null)
+    setGoalIntent(null)
+    window.location.hash = `#/${page}`
+  }
+
+  function closeStaticPage() {
+    setActiveStaticPage(null)
+    setSelected(null)
+    window.location.hash = ''
   }
 
   useEffect(() => {
@@ -145,6 +195,23 @@ export default function App() {
 
     void validateSession()
   }, [token])
+
+  useEffect(() => {
+    const syncRoute = () => {
+      const nextPage = resolveStaticPage(window.location.hash)
+      setActiveStaticPage(nextPage)
+      if (nextPage) {
+        setSelected(null)
+        setFocusedTaskId(null)
+      }
+    }
+
+    syncRoute()
+    window.addEventListener('hashchange', syncRoute)
+    return () => {
+      window.removeEventListener('hashchange', syncRoute)
+    }
+  }, [])
 
   useEffect(() => {
     const handlePop = () => {
@@ -266,7 +333,12 @@ export default function App() {
     }, 1600)
   }
 
-  const setView = (view: string | null) => setSelected(view)
+  const setView = (view: string | null) => {
+    if (activeStaticPage) {
+      clearStaticRoute()
+    }
+    setSelected(view)
+  }
 
   useEffect(() => {
     if (selected === 'pomodoro' || selected === 'meditation' || selected === 'sudoku' || selected === 'arcade' || selected === 'breakroom') {
@@ -285,21 +357,33 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (selected && viewTitles[selected]) {
+    if (activeStaticPage) {
+      document.title = `${staticPageMeta[activeStaticPage].title} — Zenflow`
+      setDescriptionMeta(staticPageMeta[activeStaticPage].description)
+    } else if (selected && viewTitles[selected]) {
       document.title = viewTitles[selected]
+      setDescriptionMeta('Zenflow tools for focus, meditation, task planning, and daily rhythm.')
     } else if (account) {
       document.title = 'Dashboard — Zenflow'
+      setDescriptionMeta('Zenflow dashboard with your account, planner, and progress in one place.')
     } else {
       document.title = 'Zenflow | Focus, Tasks, and Daily Rhythm'
+      setDescriptionMeta('Zenflow combines focus timers, planner tools, daily notes, and calm breaks in one clean flow.')
     }
-  }, [selected, account])
+  }, [selected, account, activeStaticPage])
 
   function openPlannerAt(dateKey: string) {
+    if (activeStaticPage) {
+      clearStaticRoute()
+    }
     setPlannerFocusDate(dateKey)
     setSelected('planner')
   }
 
   function openAuth(mode: 'login' | 'register', goal?: GoalIntent) {
+    if (activeStaticPage) {
+      clearStaticRoute()
+    }
     authTriggerRef.current = document.activeElement as HTMLElement
     setAuthMode(mode)
     if (goal) setGoalIntent(goal)
@@ -318,6 +402,10 @@ export default function App() {
   }
 
   function handleBottomNav(section: 'home' | 'dashboard' | 'tools' | 'activity' | 'profile') {
+    if (activeStaticPage) {
+      clearStaticRoute()
+    }
+
     if (section === 'home') {
       setSelected(null)
       return
@@ -351,6 +439,24 @@ export default function App() {
       return
     }
     setSelected('profile')
+  }
+
+  function handleOpenFocusTask(taskId: string | null) {
+    if (!taskId) return
+    if (activeStaticPage) {
+      clearStaticRoute()
+    }
+    setFocusedTaskId(taskId)
+    setSelected('pomodoro')
+  }
+
+  function renderStaticPage(page: StaticPageId) {
+    if (page === 'privacy') return <PrivacyPolicyPage />
+    if (page === 'terms') return <TermsOfServicePage />
+    if (page === 'cookie') return <CookiePolicyPage />
+    if (page === 'about') return <AboutPage />
+    if (page === 'faq') return <FAQPage />
+    return <ContactPage onNotify={showToast} />
   }
 
   const profile = profileMeta.profile || {}
@@ -479,7 +585,21 @@ export default function App() {
         </div>
       </header>
       <main>
-        {!selected ? (
+        {activeStaticPage ? (
+          <section className="legal-page-wrap fade-rise">
+            <InfoPageBreadcrumb label={staticPageMeta[activeStaticPage].title} />
+            <div className="legal-page-actions">
+              <button className="back tool-back-btn" onClick={closeStaticPage}>
+                &larr; Back to home
+              </button>
+            </div>
+            {renderStaticPage(activeStaticPage)}
+            <footer className="site-footer legal-footer">
+              <span>Zenflow</span>
+              <SiteFooterLinks onNavigate={openStaticPage} />
+            </footer>
+          </section>
+        ) : !selected ? (
           <>
             {user ? (
               <>
@@ -548,6 +668,10 @@ export default function App() {
             ) : (
               <MarketingLanding onOpenAuth={openAuth} />
             )}
+            <footer className="site-footer legal-footer fade-rise">
+              <span>Zenflow</span>
+              <SiteFooterLinks onNavigate={openStaticPage} />
+            </footer>
           </>
         ) : (
           <section className="focus-card fade-rise">
@@ -594,6 +718,7 @@ export default function App() {
               <PomodoroTimer
                 user={user}
                 token={token}
+                initialTaskId={focusedTaskId}
                 onRequireLogin={() => openAuth('login')}
                 onSelect={setView}
                 onSessionComplete={(mins) => setLastSessionMinutes(mins)}
@@ -603,8 +728,25 @@ export default function App() {
             {selected === 'sudoku' && <SudokuTrainer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
             {selected === 'arcade' && <BrainArcade user={user} token={token} onRequireLogin={() => openAuth('login')} />}
             {selected === 'breakroom' && <BreakRoom onSelect={(id) => setView(id)} lastSessionMinutes={lastSessionMinutes} />}
-            {selected === 'planner' && <PlannerBoard initialDate={plannerFocusDate} user={user} token={token} onRequireLogin={() => openAuth('login')} onMetaSaved={() => setProfileRefreshKey((value) => value + 1)} />}
-            {selected === 'profile' && <ProfileCenter user={user} token={token} onRequireLogin={() => openAuth('login')} onMetaSaved={() => setProfileRefreshKey((value) => value + 1)} />}
+            {selected === 'planner' && (
+              <PlannerBoard
+                initialDate={plannerFocusDate}
+                user={user}
+                token={token}
+                onRequireLogin={() => openAuth('login')}
+                onOpenFocusTask={handleOpenFocusTask}
+                onMetaSaved={() => setProfileRefreshKey((value) => value + 1)}
+              />
+            )}
+            {selected === 'profile' && (
+              <ProfileCenter
+                user={user}
+                token={token}
+                onRequireLogin={() => openAuth('login')}
+                onOpenFocusTask={handleOpenFocusTask}
+                onMetaSaved={() => setProfileRefreshKey((value) => value + 1)}
+              />
+            )}
           </section>
         )}
       </main>

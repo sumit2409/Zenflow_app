@@ -13,6 +13,7 @@ function formatTime(totalSeconds: number) {
 type Props = {
   user: string | null
   token?: string | null
+  initialTaskId?: string | null
   onRequireLogin?: () => void
   onSelect?: (view: string | null) => void
   onSessionComplete?: (minutes: number) => void
@@ -22,7 +23,7 @@ type Phase = 'work' | 'break'
 const DURATION_OPTIONS = [25, 50, 90]
 const BONUS_POINTS_PER_TARGET = 120
 
-export default function PomodoroTimer({ user, token, onRequireLogin, onSelect, onSessionComplete }: Props) {
+export default function PomodoroTimer({ user, token, initialTaskId, onRequireLogin, onSelect, onSessionComplete }: Props) {
   const [phase, setPhase] = useState<Phase>('work')
   const [workMinutes, setWorkMinutes] = useState(DURATION_OPTIONS[0])
   const [breakMinutes, setBreakMinutes] = useState(5)
@@ -46,6 +47,11 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect, o
   const completedRef = useRef(false)
 
   useEffect(() => {
+    if (!initialTaskId) return
+    setSelectedTaskId(initialTaskId)
+  }, [initialTaskId])
+
+  useEffect(() => {
     async function loadTasks() {
       if (!user || !token) {
         setTodos([])
@@ -66,6 +72,10 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect, o
         setTodoMap(todoByDate)
         setSessionNotesMap((meta as ProfileMeta & { sessionNotes?: Record<string, string[]> }).sessionNotes || {})
         setTodos(todayTodos)
+        if (initialTaskId && todayTodos.some((todo) => todo.id === initialTaskId)) {
+          setSelectedTaskId(initialTaskId)
+          return
+        }
         if (todayTodos.length > 0 && !todayTodos.some((todo) => todo.id === selectedTaskId)) {
           setSelectedTaskId(todayTodos.find((todo) => !todo.done)?.id || todayTodos[0].id)
         }
@@ -75,7 +85,7 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect, o
     }
 
     void loadTasks()
-  }, [user, token, selectedTaskId])
+  }, [user, token, selectedTaskId, initialTaskId])
 
   useEffect(() => {
     phaseRef.current = phase
