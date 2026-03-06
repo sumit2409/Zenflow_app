@@ -213,8 +213,11 @@ export default function ProfileCenter({ user, token, onRequireLogin, onMetaSaved
                 <p>Add the tasks you want to finish today and mark them complete as you go.</p>
               </div>
             ) : (
-              todos.map((todo) => (
-                <label key={todo.id} className={`todo-item ${todo.done ? 'done' : ''}`}>
+              todos
+                .slice()
+                .sort((left, right) => Number(left.done) - Number(right.done))
+                .map((todo) => (
+                <label key={todo.id} className={`todo-item dashboard postit-note ${todo.done ? 'done' : ''}`}>
                   <input type="checkbox" checked={todo.done} onChange={() => toggleTodo(todo.id)} />
                   <div>
                     <span>{todo.text}</span>
@@ -223,10 +226,17 @@ export default function ProfileCenter({ user, token, onRequireLogin, onMetaSaved
                   </div>
                   <button className="ghost-btn" onClick={() => removeTodo(todo.id)}>Remove</button>
                 </label>
-              ))
+                ))
             )}
           </div>
         </section>
+
+        {journal.trim() ? (
+          <section className="journal-card card inset-card">
+            <div className="section-kicker">Today&apos;s note preview</div>
+            <article className="journal-postit">{journal}</article>
+          </section>
+        ) : null}
       </div>
     </div>
   )

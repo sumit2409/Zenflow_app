@@ -37,6 +37,8 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect, o
   const [statusNote, setStatusNote] = useState('Assign a task, set a session goal, and start the cycle.')
   const [showReflection, setShowReflection] = useState(false)
   const [reflectionText, setReflectionText] = useState('')
+  const [quickTodoText, setQuickTodoText] = useState('')
+  const [quickTodoSaving, setQuickTodoSaving] = useState(false)
 
   const timerRef = useRef<number | null>(null)
   const lastTickRef = useRef<number | null>(null)
@@ -117,6 +119,32 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect, o
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ meta: { todosByDate: nextTodoMap } }),
     })
+  }
+
+  async function addQuickTask() {
+    if (!user || !token) return onRequireLogin?.()
+    const trimmedTask = quickTodoText.trim()
+    if (!trimmedTask) return
+
+    setQuickTodoSaving(true)
+    const nextTodo: TodoItem = {
+      id: `focus-${Date.now()}`,
+      text: trimmedTask,
+      done: false,
+      assignedPomodoros: 1,
+      completedPomodoros: 0,
+      bonusAwarded: false,
+    }
+    const nextTodos = [...todos, nextTodo]
+
+    try {
+      await persistTodos(nextTodos)
+      setQuickTodoText('')
+      setSelectedTaskId(nextTodo.id)
+      setStatusNote('Task added and linked to this focus cycle.')
+    } finally {
+      setQuickTodoSaving(false)
+    }
   }
 
   async function updateTaskSessions(taskId: string, assignedPomodoros: number) {
@@ -239,6 +267,7 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect, o
 
   const sessionTarget = Math.max(1, selectedTask?.assignedPomodoros || 1)
   const completedSessions = selectedTask?.completedPomodoros || 0
+  const orderedTodos = useMemo(() => [...todos].sort((left, right) => Number(left.done) - Number(right.done)), [todos])
 
   useEffect(() => {
     setSessionTargetDraft(String(sessionTarget))
@@ -287,12 +316,22 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect, o
 
       <div className="focus-task-panel card inset-card">
         <div className="section-kicker">Task-linked cycle</div>
+        <div className="todo-entry" style={{ marginBottom: '12px' }}>
+          <input
+            value={quickTodoText}
+            onChange={(event) => setQuickTodoText(event.target.value)}
+            placeholder="Add a task and start immediately"
+          />
+          <button onClick={() => void addQuickTask()} disabled={quickTodoSaving}>
+            {quickTodoSaving ? 'Saving...' : 'Add task'}
+          </button>
+        </div>
         {todos.length > 0 ? (
           <>
             <label className="task-picker">
               Choose task
               <select value={selectedTaskId} onChange={(event) => setSelectedTaskId(event.target.value)}>
-                {todos.map((todo) => (
+                {orderedTodos.map((todo) => (
                   <option key={todo.id} value={todo.id}>
                     {todo.done ? '[Done] ' : ''}{todo.text}
                   </option>
@@ -331,8 +370,8 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect, o
             )}
 
             <div className="task-mini-list">
-              {todos.slice(0, 4).map((todo) => (
-                <div key={todo.id} className={`todo-item dashboard ${todo.done ? 'done' : ''}`}>
+              {orderedTodos.slice(0, 4).map((todo) => (
+                <div key={todo.id} className={`todo-item dashboard postit-note ${todo.done ? 'done' : ''}`}>
                   <span>{todo.text}</span>
                   <div className="task-meta-chip">
                     {(todo.completedPomodoros || 0)}/{Math.max(1, todo.assignedPomodoros || 1)} sessions
@@ -344,7 +383,7 @@ export default function PomodoroTimer({ user, token, onRequireLogin, onSelect, o
         ) : (
           <div className="empty-panel">
             <h4>No tasks linked yet</h4>
-            <p>Create tasks in your account screen, then come back here to assign the number of required focus sessions.</p>
+            <p>Use the field above to add a task, then start a focus block from this screen.</p>
           </div>
         )}
       </div>

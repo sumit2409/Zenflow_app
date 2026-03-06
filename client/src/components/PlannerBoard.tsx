@@ -363,7 +363,10 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
               </div>
               <div className="planner-task-list">
                 {plannerEntries.map((entry) => (
-                  <div key={entry.id} className={`planner-item ${entry.completed ? 'done' : ''} ${entry.required ? 'required' : ''}`}>
+                  <div
+                    key={entry.id}
+                    className={`planner-item postit-note ${entry.completed ? 'done' : ''} ${entry.required ? 'required' : ''}`}
+                  >
                     <input
                       type="checkbox"
                       checked={entry.completed}
@@ -485,8 +488,8 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
             <span className="muted">These habits always appear and keep reminding until completed.</span>
           </div>
           <div className="planner-task-list">
-            {requiredEntries.map((entry) => (
-              <div key={entry.id} className={`planner-item ${entry.completed ? 'done' : ''} required`}>
+                {requiredEntries.map((entry) => (
+              <div key={entry.id} className={`planner-item postit-note ${entry.completed ? 'done' : ''} required`}>
                 <input
                   type="checkbox"
                   checked={entry.completed}
@@ -509,8 +512,8 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
             <span className="muted">{formatPlannerDate(selectedDate)}</span>
           </div>
           <div className="planner-task-list">
-            {customEntries.length > 0 ? customEntries.map((entry) => (
-              <div key={entry.id} className={`planner-item ${entry.completed ? 'done' : ''}`}>
+                {customEntries.length > 0 ? customEntries.map((entry) => (
+              <div key={entry.id} className={`planner-item postit-note ${entry.completed ? 'done' : ''}`}>
                 <input
                   type="checkbox"
                   checked={entry.completed}
@@ -548,7 +551,7 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
             <span className="muted">{formatPlannerDate(selectedDate)}</span>
           </div>
           {selectedJournal ? (
-            <article className="planner-item">
+            <article className="journal-postit">
               <div className="planner-item-copy">
                 <strong>Saved journal note</strong>
                 <span>{selectedJournal}</span>

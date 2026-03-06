@@ -625,7 +625,7 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
           {todaysTasks.length > 0 ? (
             <div className="todo-list compact">
               {todaysTasks.slice(0, 5).map((task) => (
-                <div key={task.id} className={`todo-item dashboard ${task.done ? 'done' : ''}`}>
+                <div key={task.id} className={`todo-item dashboard postit-note ${task.done ? 'done' : ''}`}>
                   <span>{task.text}</span>
                   <div className="task-meta-chip">
                     {task.done
