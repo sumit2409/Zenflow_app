@@ -8,6 +8,11 @@ type Props = { user: string | null; token?: string | null; onRequireLogin?: () =
 
 type MemoryLevel = 'easy' | 'medium' | 'hard'
 type ReactionLevel = 'easy' | 'medium' | 'hard'
+type LeaderboardEntry = {
+  username: string
+  fullName: string
+  bestMs: number
+}
 
 const reactionTargets: Record<ReactionLevel, number> = { easy: 550, medium: 420, hard: 320 }
 const memoryLengths: Record<MemoryLevel, number> = { easy: 4, medium: 5, hard: 6 }
@@ -26,6 +31,11 @@ function buildSequence(level: MemoryLevel) {
   return shuffle(keypadNumbers).slice(0, memoryLengths[level])
 }
 
+function formatReactionMs(ms: number | null) {
+  if (!ms) return '-'
+  return `${ms} ms`
+}
+
 export default function BrainArcade({ user, token, onRequireLogin }: Props) {
   const [memoryLevel, setMemoryLevel] = useState<MemoryLevel>('medium')
   const [reactionLevel, setReactionLevel] = useState<ReactionLevel>('medium')
@@ -39,25 +49,42 @@ export default function BrainArcade({ user, token, onRequireLogin }: Props) {
   const [reactionMs, setReactionMs] = useState<number | null>(null)
   const [reactionWinMessage, setReactionWinMessage] = useState('')
   const [meta, setMeta] = useState<ProfileMeta>({})
+  const [reactionLeaderboard, setReactionLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [leaderboardVersion, setLeaderboardVersion] = useState(0)
 
   const bestMemorySpan = meta.brainArcade?.memoryBestSpan || meta.brainArcade?.memoryBestMoves || 0
   const expectedSequence = useMemo(() => memorySequence.join(''), [memorySequence])
 
   useEffect(() => {
     async function load() {
-      if (!user || !token) return
+      if (!user || !token) {
+        setMeta({})
+        setReactionLeaderboard([])
+        return
+      }
+
       try {
-        const response = await fetch(apiUrl('/api/meta'), { headers: { authorization: `Bearer ${token}` } })
-        if (!response.ok) return
-        const payload = await response.json()
-        setMeta(payload.meta || {})
+        const [metaResponse, recordsResponse] = await Promise.all([
+          fetch(apiUrl('/api/meta'), { headers: { authorization: `Bearer ${token}` } }),
+          fetch(apiUrl('/api/leaderboard/game-records'), { headers: { authorization: `Bearer ${token}` } }),
+        ])
+
+        if (metaResponse.ok) {
+          const payload = await metaResponse.json()
+          setMeta(payload.meta || {})
+        }
+
+        if (recordsResponse.ok) {
+          const payload = await recordsResponse.json()
+          setReactionLeaderboard(payload.reaction || [])
+        }
       } catch (error) {
         console.error(error)
       }
     }
 
     void load()
-  }, [user, token])
+  }, [leaderboardVersion, user, token])
 
   useEffect(() => {
     setMemorySequence(buildSequence(memoryLevel))
@@ -183,12 +210,13 @@ export default function BrainArcade({ user, token, onRequireLogin }: Props) {
     await logArcade('reaction', won ? 1 : 0)
     const best = meta.brainArcade?.reactionBestMs
     if (!best || elapsed < best) {
-      void persistMeta({
+      await persistMeta({
         brainArcade: {
           ...(meta.brainArcade || {}),
           reactionBestMs: elapsed,
         },
       })
+      setLeaderboardVersion((value) => value + 1)
     }
   }
 
@@ -283,11 +311,11 @@ export default function BrainArcade({ user, token, onRequireLogin }: Props) {
           </div>
           <div className="mini-stats">
             <div>
-              <strong>{reactionMs ?? '-'}</strong>
+              <strong>{formatReactionMs(reactionMs)}</strong>
               <span>Latest</span>
             </div>
             <div>
-              <strong>{meta.brainArcade?.reactionBestMs || '-'}</strong>
+              <strong>{formatReactionMs(meta.brainArcade?.reactionBestMs || null)}</strong>
               <span>Best ms</span>
             </div>
             <div>
@@ -302,6 +330,25 @@ export default function BrainArcade({ user, token, onRequireLogin }: Props) {
             {reactionState === 'waiting' && <button onClick={handleReactionTap}>Too soon</button>}
           </div>
           {reactionWinMessage && <div className={`game-result ${reactionMs !== null && reactionMs <= reactionTargets[reactionLevel] ? 'success' : ''}`}>{reactionWinMessage}</div>}
+          <section className="record-panel">
+            <div className="section-kicker">Top reaction times</div>
+            {reactionLeaderboard.length > 0 ? (
+              <div className="leaderboard-list compact">
+                {reactionLeaderboard.map((entry, index) => (
+                  <div key={entry.username} className="leaderboard-row">
+                    <strong>#{index + 1}</strong>
+                    <div>
+                      <span>@{entry.username}</span>
+                      <small>{entry.fullName}</small>
+                    </div>
+                    <span>{formatReactionMs(entry.bestMs)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">No reaction times logged yet.</p>
+            )}
+          </section>
         </section>
       </div>
     </div>

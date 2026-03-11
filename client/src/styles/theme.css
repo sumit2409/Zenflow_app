@@ -1182,14 +1182,26 @@ button:disabled {
 
 .intention-input {
   width: 100%;
-  min-height: 150px;
+  min-height: 180px;
   resize: vertical;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.82);
   color: var(--ink);
   outline: none;
+}
+
+.intention-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.95fr) minmax(0, 1.05fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.intention-editor {
+  display: grid;
+  gap: 12px;
 }
 
 .intention-input:focus,
@@ -1211,6 +1223,10 @@ input[type='number']:focus {
 .break-ideas {
   display: grid;
   gap: 12px;
+}
+
+.leaderboard-list.compact {
+  gap: 8px;
 }
 
 .quest-row {
@@ -1236,6 +1252,27 @@ input[type='number']:focus {
 
 .leaderboard-row small {
   color: var(--ink-soft);
+}
+
+.records-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.record-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.leaderboard-list.compact .leaderboard-row {
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.74);
 }
 
 .quest-copy strong,
@@ -2722,6 +2759,71 @@ input[type='date'],
   margin-top: 10px;
 }
 
+.intention-postit {
+  position: relative;
+  min-height: 240px;
+  margin-top: 4px;
+  padding: 56px 26px 24px;
+  border-radius: 12px 12px 22px 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent 20%),
+    linear-gradient(145deg, #f5d86e, #efc64f 74%);
+  box-shadow:
+    0 18px 32px rgba(74, 57, 36, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.48);
+  transform: rotate(-2.8deg);
+  overflow: hidden;
+}
+
+.intention-postit::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  width: 74px;
+  height: 18px;
+  border-radius: 6px;
+  background: rgba(255, 246, 219, 0.72);
+  box-shadow: 0 3px 8px rgba(74, 57, 36, 0.08);
+  transform: translateX(-50%) rotate(-4deg);
+}
+
+.intention-postit::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 58px;
+  height: 58px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.48), rgba(228, 181, 52, 0.08));
+  clip-path: polygon(100% 0, 0 100%, 100% 100%);
+  opacity: 0.7;
+}
+
+.intention-postit-label {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  color: rgba(58, 43, 18, 0.76);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.intention-postit p {
+  margin: 0;
+  min-height: 150px;
+  color: #2f241e;
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: clamp(25px, 2vw, 34px);
+  line-height: 1.02;
+  white-space: pre-wrap;
+}
+
+.intention-postit.empty p {
+  color: rgba(47, 36, 30, 0.62);
+}
+
 .focus-task-panel {
   margin-bottom: 18px;
   padding: 16px;
@@ -3048,6 +3150,15 @@ input[type='date'],
 
   .quest-meter {
     width: 100%;
+  }
+
+  .intention-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .intention-postit {
+    min-height: 210px;
+    transform: rotate(-1.4deg);
   }
 
   .hero-copy h1,

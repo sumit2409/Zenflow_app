@@ -35,15 +35,73 @@ const puzzlesByDifficulty: Record<SudokuDifficulty, SudokuPuzzle[]> = {
     {
       difficulty: 'hard',
       puzzle: '000900002050123400030000160908000000070000090000000205091000050007439020400007000',
-      solution: '416958372859123476732674168948265713275341896163789245391842657687439521524617389',
-    },
-    {
-      difficulty: 'hard',
-      puzzle: '000000000907000420180000705026100904000050000040000507009920108000034059000507000',
-      solution: '264715893957368421183249765526173984798654312341892576639425178812734659475981236',
+      solution: '814976532659123478732854169948265317275341896163798245391682754587439621426517983',
     },
   ],
 }
+
+function hasUniqueDigits(values: string[]) {
+  const digits = values.filter((value) => value !== '0')
+  return new Set(digits).size === digits.length
+}
+
+function validateTemplate(template: SudokuPuzzle) {
+  if (template.puzzle.length !== 81 || template.solution.length !== 81) {
+    return 'puzzle and solution must both be 81 characters'
+  }
+
+  for (let index = 0; index < 81; index += 1) {
+    const clue = template.puzzle[index]
+    const answer = template.solution[index]
+
+    if (!/[0-9]/.test(clue)) return `invalid puzzle digit at index ${index}`
+    if (!/[1-9]/.test(answer)) return `invalid solution digit at index ${index}`
+    if (clue !== '0' && clue !== answer) return `clue mismatch at index ${index}`
+  }
+
+  for (let row = 0; row < 9; row += 1) {
+    const puzzleRow = template.puzzle.slice(row * 9, row * 9 + 9).split('')
+    const solutionRow = template.solution.slice(row * 9, row * 9 + 9).split('')
+    if (!hasUniqueDigits(puzzleRow)) return `duplicate clue in row ${row + 1}`
+    if (new Set(solutionRow).size !== 9) return `invalid solution row ${row + 1}`
+  }
+
+  for (let col = 0; col < 9; col += 1) {
+    const puzzleColumn = Array.from({ length: 9 }, (_, row) => template.puzzle[row * 9 + col])
+    const solutionColumn = Array.from({ length: 9 }, (_, row) => template.solution[row * 9 + col])
+    if (!hasUniqueDigits(puzzleColumn)) return `duplicate clue in column ${col + 1}`
+    if (new Set(solutionColumn).size !== 9) return `invalid solution column ${col + 1}`
+  }
+
+  for (let boxRow = 0; boxRow < 3; boxRow += 1) {
+    for (let boxCol = 0; boxCol < 3; boxCol += 1) {
+      const puzzleBox: string[] = []
+      const solutionBox: string[] = []
+
+      for (let row = 0; row < 3; row += 1) {
+        for (let col = 0; col < 3; col += 1) {
+          const index = (boxRow * 3 + row) * 9 + (boxCol * 3 + col)
+          puzzleBox.push(template.puzzle[index])
+          solutionBox.push(template.solution[index])
+        }
+      }
+
+      if (!hasUniqueDigits(puzzleBox)) return `duplicate clue in box ${boxRow + 1}-${boxCol + 1}`
+      if (new Set(solutionBox).size !== 9) return `invalid solution box ${boxRow + 1}-${boxCol + 1}`
+    }
+  }
+
+  return null
+}
+
+Object.entries(puzzlesByDifficulty).forEach(([difficulty, list]) => {
+  list.forEach((template, index) => {
+    const issue = validateTemplate(template)
+    if (issue) {
+      throw new Error(`Invalid Sudoku template ${difficulty}[${index}]: ${issue}`)
+    }
+  })
+})
 
 function shuffle<T>(items: T[]) {
   const copy = [...items]

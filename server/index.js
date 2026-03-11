@@ -476,6 +476,43 @@ function calculateLogPoints(type, value) {
   return 0
 }
 
+function buildGameRecordsFromEntries(entries) {
+  const difficulties = ['easy', 'medium', 'hard']
+  const sudoku = { easy: [], medium: [], hard: [] }
+
+  difficulties.forEach((difficulty) => {
+    sudoku[difficulty] = entries
+      .map((entry) => {
+        const bestMs = Number(entry.meta?.sudoku?.bestTimesMs?.[difficulty] || 0)
+        if (!bestMs) return null
+        return {
+          username: entry.username,
+          fullName: entry.fullName,
+          bestMs,
+        }
+      })
+      .filter(Boolean)
+      .sort((left, right) => left.bestMs - right.bestMs)
+      .slice(0, 5)
+  })
+
+  const reaction = entries
+    .map((entry) => {
+      const bestMs = Number(entry.meta?.brainArcade?.reactionBestMs || 0)
+      if (!bestMs) return null
+      return {
+        username: entry.username,
+        fullName: entry.fullName,
+        bestMs,
+      }
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.bestMs - right.bestMs)
+    .slice(0, 5)
+
+  return { sudoku, reaction }
+}
+
 function getAttemptKey(req, identifier) {
   return `${req.ip || 'unknown'}:${String(identifier || '').toLowerCase()}`
 }
@@ -1427,6 +1464,38 @@ app.get('/api/leaderboard', authMiddleware, async (req, res) => {
       .slice(0, 5)
 
     return res.json({ leaderboard })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/leaderboard/game-records', authMiddleware, async (req, res) => {
+  try {
+    if (useFileStorage) {
+      const data = readData()
+      const entries = Object.entries(data.users || {}).map(([username, user]) => ({
+        username,
+        fullName: user.fullName || username,
+        meta: data.meta?.[username] || {},
+      }))
+
+      return res.json(buildGameRecordsFromEntries(entries))
+    }
+
+    const [users, metas] = await Promise.all([User.find({}).exec(), Meta.find({}).exec()])
+    const metaByUser = metas.reduce((acc, entry) => {
+      acc[entry.user] = entry.meta || {}
+      return acc
+    }, {})
+
+    const entries = users.map((user) => ({
+      username: user.username,
+      fullName: user.fullName || user.username,
+      meta: metaByUser[user.username] || {},
+    }))
+
+    return res.json(buildGameRecordsFromEntries(entries))
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'server error' })

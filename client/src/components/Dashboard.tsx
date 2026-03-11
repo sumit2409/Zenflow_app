@@ -447,17 +447,25 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
           <p className="muted" style={{ fontSize: '13px', fontStyle: 'italic', marginBottom: '10px' }}>
             {todayPrompt}
           </p>
-          <textarea
-            className="intention-input"
-            value={intentionDraft}
-            onChange={(event) => setIntentionDraft(event.target.value)}
-            placeholder="Write your answer here..."
-          />
-          <div className="intention-actions">
-            <button onClick={saveIntention} disabled={!user || saveState === 'saving'}>
-              {saveState === 'saving' ? 'Saving...' : 'Save note'}
-            </button>
-            <span className="muted">{user ? (saveState === 'saved' ? 'Saved.' : 'Stored in your account.') : 'Login to keep this.'}</span>
+          <div className="intention-layout">
+            <article className={`journal-postit intention-postit ${intentionDraft.trim() ? 'filled' : 'empty'}`} aria-label="Daily note preview">
+              <div className="intention-postit-label">today</div>
+              <p>{intentionDraft.trim() || 'Write a short note and pin the focus for today.'}</p>
+            </article>
+            <div className="intention-editor">
+              <textarea
+                className="intention-input"
+                value={intentionDraft}
+                onChange={(event) => setIntentionDraft(event.target.value)}
+                placeholder="Write your answer here..."
+              />
+              <div className="intention-actions">
+                <button onClick={saveIntention} disabled={!user || saveState === 'saving'}>
+                  {saveState === 'saving' ? 'Saving...' : 'Save note'}
+                </button>
+                <span className="muted">{user ? (saveState === 'saved' ? 'Saved.' : 'Stored in your account.') : 'Login to keep this.'}</span>
+              </div>
+            </div>
           </div>
         </article>
       </section>

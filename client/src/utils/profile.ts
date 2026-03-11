@@ -23,6 +23,9 @@ export type ProfileMeta = WellnessMeta & {
   }
   journals?: Record<string, string>
   todosByDate?: Record<string, TodoItem[]>
+  sudoku?: {
+    bestTimesMs?: Partial<Record<'easy' | 'medium' | 'hard', number>>
+  }
   brainArcade?: {
     memoryBestMoves?: number
     memoryBestSpan?: number
