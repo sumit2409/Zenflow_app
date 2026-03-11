@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { todayKey } from '../utils/wellness'
-import { type ProfileMeta, type TodoItem } from '../utils/profile'
+import { getJournalNotes, type ProfileMeta, type TodoItem } from '../utils/profile'
 import { apiUrl } from '../utils/api'
 
 type Props = {
@@ -28,6 +28,7 @@ export default function ProfileCenter({ user, token, onRequireLogin, onOpenFocus
   const [todoText, setTodoText] = useState('')
   const [todos, setTodos] = useState<TodoItem[]>([])
   const [saveNote, setSaveNote] = useState('Login to preserve your profile and reflections.')
+  const todayNotes = useMemo(() => getJournalNotes(meta.journals, today), [meta.journals, today])
 
   useEffect(() => {
     async function load() {
@@ -44,7 +45,7 @@ export default function ProfileCenter({ user, token, onRequireLogin, onOpenFocus
           dateOfBirth: nextMeta.profile?.dateOfBirth || '',
         })
         setTheme(nextMeta.appearance?.theme || 'sand')
-        setJournal(nextMeta.journals?.[today] || '')
+        setJournal('')
         setTodos(nextMeta.todosByDate?.[today] || [])
         setSaveNote('Your private space is synced.')
       } catch (error) {
@@ -94,11 +95,40 @@ export default function ProfileCenter({ user, token, onRequireLogin, onOpenFocus
 
   function saveJournal() {
     if (!user || !token) return onRequireLogin?.()
+    if (!journal.trim()) return
+
+    const nextNotes = [
+      ...todayNotes,
+      {
+        id: `note-${Date.now()}`,
+        text: journal.trim(),
+        createdAt: Date.now(),
+      },
+    ]
+
     void persistMeta({
       journals: {
         ...(meta.journals || {}),
-        [today]: journal,
+        [today]: nextNotes,
       },
+    })
+    setJournal('')
+  }
+
+  function removeJournal(noteId: string) {
+    if (!user || !token) return onRequireLogin?.()
+
+    const nextNotes = todayNotes.filter((note) => note.id !== noteId)
+    const nextJournals = { ...(meta.journals || {}) }
+
+    if (nextNotes.length > 0) {
+      nextJournals[today] = nextNotes
+    } else {
+      delete nextJournals[today]
+    }
+
+    void persistMeta({
+      journals: nextJournals,
     })
   }
 
@@ -202,7 +232,8 @@ export default function ProfileCenter({ user, token, onRequireLogin, onOpenFocus
             placeholder="Write a short note for today."
           />
           <div className="controls">
-            <button onClick={saveJournal}>Save journal</button>
+            <button onClick={saveJournal} disabled={!journal.trim()}>Save note</button>
+            <button className="ghost-btn" onClick={() => setJournal('')} disabled={!journal}>New note</button>
           </div>
         </section>
 
@@ -246,10 +277,23 @@ export default function ProfileCenter({ user, token, onRequireLogin, onOpenFocus
           </div>
         </section>
 
-        {journal.trim() ? (
+        {todayNotes.length > 0 ? (
           <section className="journal-card card inset-card">
-            <div className="section-kicker">Today&apos;s note preview</div>
-            <article className="journal-postit">{journal}</article>
+            <div className="section-kicker">Today&apos;s saved notes</div>
+            <div className="note-stack">
+              {todayNotes
+                .slice()
+                .reverse()
+                .map((note) => (
+                  <article key={note.id} className="journal-postit note-card">
+                    <div className="note-card-head">
+                      <strong>{note.createdAt ? new Date(note.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Saved note'}</strong>
+                      <button className="ghost-btn" onClick={() => removeJournal(note.id)}>Delete</button>
+                    </div>
+                    <p>{note.text}</p>
+                  </article>
+                ))}
+            </div>
           </section>
         ) : null}
       </div>

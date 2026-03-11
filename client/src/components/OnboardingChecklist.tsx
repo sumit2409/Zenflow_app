@@ -1,6 +1,6 @@
 import React from 'react'
-import type { ProfileMeta } from '../utils/profile'
-import type { LogEntry } from '../utils/wellness'
+import { getJournalNotes, type ProfileMeta } from '../utils/profile'
+import { todayKey, type LogEntry } from '../utils/wellness'
 
 type Props = {
   meta: ProfileMeta
@@ -13,7 +13,7 @@ export default function OnboardingChecklist({ meta, logs, onSelect }: Props) {
     {
       id: 'note',
       title: 'Add today’s note',
-      done: Boolean(meta.intention?.trim()),
+      done: Boolean(getJournalNotes(meta.journals, todayKey()).length > 0 || meta.intention?.trim()),
       action: () => onSelect('profile'),
       cta: 'Write note',
       help: 'A short note helps you set the day before starting a session.',

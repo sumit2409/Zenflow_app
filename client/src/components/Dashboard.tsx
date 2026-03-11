@@ -23,9 +23,8 @@ import {
   getTotalPoints,
   todayKey,
   type LogEntry,
-  type WellnessMeta,
 } from '../utils/wellness'
-import { type ProfileMeta } from '../utils/profile'
+import { getJournalNotes, type JournalNote, type ProfileMeta } from '../utils/profile'
 import { apiUrl } from '../utils/api'
 import OnboardingChecklist from './OnboardingChecklist'
 import { getPlannerEntries, parsePlannerDate } from '../utils/planner'
@@ -148,14 +147,20 @@ const DAILY_PROMPTS = [
 
 const CHART_COLORS = ['#bc6c47', '#6b8f71', '#5e7aad', '#a06bb5', '#c9904f']
 
+function formatNoteTimestamp(note: JournalNote) {
+  if (!note.createdAt) return 'Saved note'
+  return new Date(note.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
 export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: Props) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [meta, setMeta] = useState<ProfileMeta>({})
   const [trends, setTrends] = useState<TrendEntry[]>([])
   const [trendDateKeys, setTrendDateKeys] = useState<string[]>([])
   const [newlyUnlocked, setNewlyUnlocked] = useState<string | null>(null)
+  const [selectedNoteDate, setSelectedNoteDate] = useState(todayKey())
   const [intentionDraft, setIntentionDraft] = useState('')
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'deleted'>('idle')
   const [isLoading, setIsLoading] = useState(true)
   const prevAchievementsRef = useRef<ReturnType<typeof getAchievements>>([])
 
@@ -202,8 +207,14 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
   }, [user, token])
 
   useEffect(() => {
-    setIntentionDraft(meta.intention || '')
-  }, [meta.intention])
+    const notesForDate = getJournalNotes(meta.journals, selectedNoteDate)
+    if (selectedNoteDate === todayKey() && notesForDate.length === 0) {
+      setIntentionDraft(meta.intention || '')
+      return
+    }
+
+    setIntentionDraft('')
+  }, [meta.intention, meta.journals, selectedNoteDate])
 
   const totalPoints = useMemo(() => getTotalPoints(logs), [logs])
   const level = useMemo(() => getLevel(totalPoints), [totalPoints])
@@ -216,6 +227,7 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
   const todayScore = useMemo(() => calculateDailyScore(logs, todayKey(), meta.planner), [logs, meta.planner])
   const rewardCount = meta.rewardCount || 0
   const rewardReady = Boolean(user && allQuestsComplete(quests) && meta.lastClaimedDate !== todayKey())
+  const notesForSelectedDate = useMemo(() => getJournalNotes(meta.journals, selectedNoteDate), [meta.journals, selectedNoteDate])
   const todaysTasks = meta.todosByDate?.[todayKey()] || []
   const completedTasks = todaysTasks.filter((task) => task.done).length
   const todayPrompt = useMemo(() => {
@@ -262,7 +274,7 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
     prevAchievementsRef.current = achievements
   }, [achievements])
 
-  async function persistMeta(partial: WellnessMeta) {
+  async function persistMeta(partial: Partial<ProfileMeta>) {
     setMeta(prev => ({ ...prev, ...partial }))
     if (!user || !token) return
     await fetch(apiUrl('/api/meta'), {
@@ -273,10 +285,49 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
   }
 
   async function saveIntention() {
+    if (!user || !token || !intentionDraft.trim()) return
+
+    const nextNotes = [
+      ...notesForSelectedDate,
+      {
+        id: `note-${Date.now()}`,
+        text: intentionDraft.trim(),
+        createdAt: Date.now(),
+      },
+    ]
+    const nextJournals = {
+      ...(meta.journals || {}),
+      [selectedNoteDate]: nextNotes,
+    }
+
     setSaveState('saving')
     try {
-      await persistMeta({ intention: intentionDraft.trim() })
+      await persistMeta({ journals: nextJournals })
+      setIntentionDraft('')
       setSaveState('saved')
+      window.setTimeout(() => setSaveState('idle'), 1400)
+    } catch (error) {
+      console.error(error)
+      setSaveState('idle')
+    }
+  }
+
+  async function deleteNote(noteId: string) {
+    if (!user || !token) return
+
+    const nextNotes = notesForSelectedDate.filter((note) => note.id !== noteId)
+    const nextJournals = { ...(meta.journals || {}) }
+
+    if (nextNotes.length > 0) {
+      nextJournals[selectedNoteDate] = nextNotes
+    } else {
+      delete nextJournals[selectedNoteDate]
+    }
+
+    setSaveState('saving')
+    try {
+      await persistMeta({ journals: nextJournals })
+      setSaveState('deleted')
       window.setTimeout(() => setSaveState('idle'), 1400)
     } catch (error) {
       console.error(error)
@@ -447,9 +498,16 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
           <p className="muted" style={{ fontSize: '13px', fontStyle: 'italic', marginBottom: '10px' }}>
             {todayPrompt}
           </p>
+          <div className="note-toolbar">
+            <label className="note-date-field">
+              Note date
+              <input type="date" value={selectedNoteDate} onChange={(event) => setSelectedNoteDate(event.target.value)} />
+            </label>
+            <div className="task-meta-chip">{notesForSelectedDate.length} saved</div>
+          </div>
           <div className="intention-layout">
             <article className={`journal-postit intention-postit ${intentionDraft.trim() ? 'filled' : 'empty'}`} aria-label="Daily note preview">
-              <div className="intention-postit-label">today</div>
+              <div className="intention-postit-label">{selectedNoteDate === todayKey() ? 'today' : selectedNoteDate}</div>
               <p>{intentionDraft.trim() || 'Write a short note and pin the focus for today.'}</p>
             </article>
             <div className="intention-editor">
@@ -457,14 +515,48 @@ export default function Dashboard({ onSelect, onOpenPlannerDate, user, token }: 
                 className="intention-input"
                 value={intentionDraft}
                 onChange={(event) => setIntentionDraft(event.target.value)}
-                placeholder="Write your answer here..."
+                placeholder="Write your note here..."
               />
               <div className="intention-actions">
-                <button onClick={saveIntention} disabled={!user || saveState === 'saving'}>
+                <button onClick={saveIntention} disabled={!user || saveState === 'saving' || !intentionDraft.trim()}>
                   {saveState === 'saving' ? 'Saving...' : 'Save note'}
                 </button>
-                <span className="muted">{user ? (saveState === 'saved' ? 'Saved.' : 'Stored in your account.') : 'Login to keep this.'}</span>
+                <button className="ghost-btn" onClick={() => setIntentionDraft('')} disabled={!intentionDraft}>
+                  New note
+                </button>
+                <span className="muted">
+                  {!user
+                    ? 'Login to keep this.'
+                    : saveState === 'saved'
+                      ? 'Saved.'
+                      : saveState === 'deleted'
+                        ? 'Deleted.'
+                        : 'Notes are stored by date in your account.'}
+                </span>
               </div>
+              {notesForSelectedDate.length > 0 ? (
+                <div className="note-stack">
+                  {notesForSelectedDate
+                    .slice()
+                    .reverse()
+                    .map((note) => (
+                      <article key={note.id} className="journal-postit note-card">
+                        <div className="note-card-head">
+                          <strong>{formatNoteTimestamp(note)}</strong>
+                          <button className="ghost-btn" onClick={() => void deleteNote(note.id)} disabled={!user || saveState === 'saving'}>
+                            Delete
+                          </button>
+                        </div>
+                        <p>{note.text}</p>
+                      </article>
+                    ))}
+                </div>
+              ) : (
+                <div className="empty-panel note-empty">
+                  <h4>No saved notes for this date</h4>
+                  <p>Write one above and save it to keep a dated history of your notes.</p>
+                </div>
+              )}
             </div>
           </div>
         </article>

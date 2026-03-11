@@ -1199,7 +1199,24 @@ button:disabled {
   align-items: start;
 }
 
+.note-toolbar,
 .intention-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.note-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.note-date-field {
+  display: grid;
+  gap: 8px;
+}
+
+.note-stack {
   display: grid;
   gap: 12px;
 }
@@ -1273,6 +1290,27 @@ input[type='number']:focus {
   padding: 10px 12px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.74);
+}
+
+.note-card {
+  display: grid;
+  gap: 10px;
+}
+
+.note-card p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.note-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.note-empty {
+  margin-top: 4px;
 }
 
 .quest-copy strong,
@@ -2289,22 +2327,64 @@ input[type='date'],
   grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 0;
   padding: 12px;
-  border: 2px solid rgba(79, 58, 41, 0.2);
+  border: 3px solid rgba(79, 58, 41, 0.34);
   border-radius: 28px;
-  background: rgba(255, 252, 249, 0.92);
+  background:
+    linear-gradient(90deg, transparent 0, transparent calc(33.333% - 2px), rgba(79, 58, 41, 0.22) calc(33.333% - 2px), rgba(79, 58, 41, 0.22) calc(33.333% + 2px), transparent calc(33.333% + 2px), transparent calc(66.666% - 2px), rgba(79, 58, 41, 0.22) calc(66.666% - 2px), rgba(79, 58, 41, 0.22) calc(66.666% + 2px), transparent calc(66.666% + 2px)),
+    linear-gradient(180deg, transparent 0, transparent calc(33.333% - 2px), rgba(79, 58, 41, 0.22) calc(33.333% - 2px), rgba(79, 58, 41, 0.22) calc(33.333% + 2px), transparent calc(33.333% + 2px), transparent calc(66.666% - 2px), rgba(79, 58, 41, 0.22) calc(66.666% - 2px), rgba(79, 58, 41, 0.22) calc(66.666% + 2px), transparent calc(66.666% + 2px)),
+    rgba(255, 252, 249, 0.92);
   box-shadow: var(--shadow);
+}
+
+.sudoku-board-wrap {
+  position: relative;
+}
+
+.sudoku-board.inactive {
+  filter: saturate(0.82) blur(0.4px);
+}
+
+.sudoku-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  border-radius: 28px;
+  background: rgba(243, 234, 223, 0.58);
+  backdrop-filter: blur(6px);
+}
+
+.sudoku-overlay-card {
+  display: grid;
+  gap: 10px;
+  width: min(280px, 100%);
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(255, 251, 247, 0.94);
+  box-shadow: 0 18px 36px rgba(77, 49, 31, 0.16);
+  text-align: center;
+}
+
+.sudoku-overlay-card span {
+  color: var(--ink-soft);
 }
 
 .sudoku-cell {
   aspect-ratio: 1;
   width: 100%;
   text-align: center;
-  border: 1px solid rgba(79, 58, 41, 0.16);
+  border: 1px solid rgba(79, 58, 41, 0.14);
   border-radius: 0;
   background: rgba(255, 255, 255, 0.88);
   color: var(--ink);
   font-size: 18px;
   font-weight: 700;
+}
+
+.sudoku-cell.subgrid-tint {
+  background: rgba(246, 238, 229, 0.94);
 }
 
 .sudoku-cell.locked {
@@ -2318,19 +2398,23 @@ input[type='date'],
 }
 
 .sudoku-cell.block-left {
-  border-left-width: 3px;
+  border-left-width: 4px;
+  border-left-color: rgba(79, 58, 41, 0.42);
 }
 
 .sudoku-cell.block-right {
-  border-right-width: 3px;
+  border-right-width: 4px;
+  border-right-color: rgba(79, 58, 41, 0.42);
 }
 
 .sudoku-cell.block-top {
-  border-top-width: 3px;
+  border-top-width: 4px;
+  border-top-color: rgba(79, 58, 41, 0.42);
 }
 
 .sudoku-cell.block-bottom {
-  border-bottom-width: 3px;
+  border-bottom-width: 4px;
+  border-bottom-color: rgba(79, 58, 41, 0.42);
 }
 
 .sudoku-side h3,
@@ -3154,6 +3238,15 @@ input[type='date'],
 
   .intention-layout {
     grid-template-columns: 1fr;
+  }
+
+  .note-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .note-card-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .intention-postit {

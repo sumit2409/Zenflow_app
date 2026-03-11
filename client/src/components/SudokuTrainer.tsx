@@ -35,6 +35,11 @@ function formatDurationMs(ms: number | null) {
   return `${seconds}.${tenths}s`
 }
 
+function getElapsedDuration(startedAt: number | null, elapsedMs: number) {
+  if (startedAt === null) return elapsedMs
+  return Math.round(performance.now() - startedAt)
+}
+
 export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
   const [difficulty, setDifficulty] = useState<SudokuDifficulty>('medium')
   const [puzzleVersion, setPuzzleVersion] = useState(0)
@@ -47,7 +52,9 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
   const [meta, setMeta] = useState<ProfileMeta>({})
   const [leaderboard, setLeaderboard] = useState<Record<SudokuDifficulty, LeaderboardEntry[]>>(createEmptyLeaderboard())
   const [leaderboardVersion, setLeaderboardVersion] = useState(0)
-  const [startedAt, setStartedAt] = useState(() => performance.now())
+  const [hasStarted, setHasStarted] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
+  const [startedAt, setStartedAt] = useState<number | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
 
   const currentBestMs = meta.sudoku?.bestTimesMs?.[difficulty] || null
@@ -87,21 +94,23 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
     setGrid(toGrid(puzzle.puzzle))
     setSolved(false)
     setWinMessage('')
-    setFeedbackMessage('Use the number that matches the solution for each square.')
+    setFeedbackMessage('Press start when you are ready to begin the timer.')
     setInvalidCells({})
-    setStartedAt(performance.now())
+    setHasStarted(false)
+    setIsPaused(false)
+    setStartedAt(null)
     setElapsedMs(0)
   }, [puzzle])
 
   useEffect(() => {
-    if (solved) return undefined
+    if (solved || !hasStarted || isPaused || startedAt === null) return undefined
 
     const interval = window.setInterval(() => {
-      setElapsedMs(Math.round(performance.now() - startedAt))
+      setElapsedMs(getElapsedDuration(startedAt, 0))
     }, 200)
 
     return () => window.clearInterval(interval)
-  }, [solved, startedAt])
+  }, [hasStarted, isPaused, solved, startedAt])
 
   async function persistSolve(solveMs: number) {
     if (!user || !token) return onRequireLogin?.()
@@ -151,8 +160,28 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
     }
   }
 
+  function startPuzzle() {
+    if (solved || (hasStarted && !isPaused)) return
+
+    void playStartChime()
+    setHasStarted(true)
+    setIsPaused(false)
+    setStartedAt(performance.now() - elapsedMs)
+    setFeedbackMessage(isPaused ? 'Puzzle resumed. Keep going.' : 'Timer started. Solve the board as fast as you can.')
+  }
+
+  function pausePuzzle() {
+    if (!hasStarted || isPaused || solved || startedAt === null) return
+
+    const nextElapsed = getElapsedDuration(startedAt, elapsedMs)
+    setElapsedMs(nextElapsed)
+    setIsPaused(true)
+    setStartedAt(null)
+    setFeedbackMessage('Puzzle paused. Press start to continue.')
+  }
+
   function handleChange(row: number, col: number, nextValue: string) {
-    if (solved || isCellLocked(puzzle.puzzle, row, col)) return
+    if (solved || !hasStarted || isPaused || isCellLocked(puzzle.puzzle, row, col)) return
 
     const cellKey = `${row}-${col}`
     const parsed = Number(nextValue.replace(/[^1-9]/g, '').slice(-1) || 0)
@@ -184,10 +213,12 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
     setFeedbackMessage(`Row ${row + 1}, column ${col + 1} is correct.`)
 
     if (isSolved(nextGrid, puzzle.solution)) {
-      const solveMs = Math.round(performance.now() - startedAt)
+      const solveMs = getElapsedDuration(startedAt, elapsedMs)
       const isNewBest = !currentBestMs || solveMs < currentBestMs
 
       setElapsedMs(solveMs)
+      setStartedAt(null)
+      setIsPaused(false)
       setSolved(true)
       setWinMessage(`You solved the ${difficulty} puzzle in ${formatDurationMs(solveMs)}${isNewBest ? ' and set a new best time.' : '.'}`)
       void playVictoryFanfare()
@@ -201,6 +232,8 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
   }
 
   function clearWrongEntries() {
+    if (!hasStarted || isPaused || solved) return
+
     const nextGrid = grid.map((row, rowIndex) =>
       row.map((cell, colIndex) => (invalidCells[`${rowIndex}-${colIndex}`] ? 0 : cell))
     )
@@ -233,24 +266,35 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
               </button>
             ))}
           </div>
-          <div className="sudoku-board" role="grid" aria-label={`Sudoku puzzle ${difficulty}`}>
-            {grid.map((row, rowIndex) =>
-              row.map((cell, colIndex) => {
-                const cellKey = `${rowIndex}-${colIndex}`
-                return (
-                  <input
-                    key={cellKey}
-                    className={`sudoku-cell ${isCellLocked(puzzle.puzzle, rowIndex, colIndex) ? 'locked' : ''} ${invalidCells[cellKey] ? 'incorrect' : ''} ${colIndex % 3 === 0 ? 'block-left' : ''} ${colIndex === 8 ? 'block-right' : ''} ${rowIndex % 3 === 0 ? 'block-top' : ''} ${rowIndex === 8 ? 'block-bottom' : ''}`}
-                    value={cell || ''}
-                    onChange={(event) => handleChange(rowIndex, colIndex, event.target.value)}
-                    inputMode="numeric"
-                    maxLength={1}
-                    aria-label={`Row ${rowIndex + 1} Column ${colIndex + 1}`}
-                    disabled={isCellLocked(puzzle.puzzle, rowIndex, colIndex)}
-                  />
-                )
-              })
-            )}
+          <div className="sudoku-board-wrap">
+            <div className={`sudoku-board ${!hasStarted || isPaused ? 'inactive' : ''}`} role="grid" aria-label={`Sudoku puzzle ${difficulty}`}>
+              {grid.map((row, rowIndex) =>
+                row.map((cell, colIndex) => {
+                  const cellKey = `${rowIndex}-${colIndex}`
+                  return (
+                    <input
+                      key={cellKey}
+                      className={`sudoku-cell ${(Math.floor(rowIndex / 3) + Math.floor(colIndex / 3)) % 2 === 0 ? 'subgrid-tint' : ''} ${isCellLocked(puzzle.puzzle, rowIndex, colIndex) ? 'locked' : ''} ${invalidCells[cellKey] ? 'incorrect' : ''} ${colIndex % 3 === 0 ? 'block-left' : ''} ${colIndex === 8 ? 'block-right' : ''} ${rowIndex % 3 === 0 ? 'block-top' : ''} ${rowIndex === 8 ? 'block-bottom' : ''}`}
+                      value={cell || ''}
+                      onChange={(event) => handleChange(rowIndex, colIndex, event.target.value)}
+                      inputMode="numeric"
+                      maxLength={1}
+                      aria-label={`Row ${rowIndex + 1} Column ${colIndex + 1}`}
+                      disabled={isCellLocked(puzzle.puzzle, rowIndex, colIndex) || solved || !hasStarted || isPaused}
+                    />
+                  )
+                })
+              )}
+            </div>
+            {(!hasStarted || isPaused) && !solved ? (
+              <div className="sudoku-overlay">
+                <div className="sudoku-overlay-card">
+                  <strong>{isPaused ? 'Puzzle paused' : 'Ready to start'}</strong>
+                  <span>{isPaused ? 'Resume when you want the timer running again.' : 'The board stays locked until you start the timer.'}</span>
+                  <button onClick={startPuzzle}>{isPaused ? 'Resume puzzle' : 'Start puzzle'}</button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -259,7 +303,7 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
           <p className="muted">Every new round loads a fresh board. Wrong entries are highlighted immediately so you can correct them quickly.</p>
           <div className="mini-stats sudoku-stats">
             <div>
-              <strong>{solved ? 'Done' : 'Live'}</strong>
+              <strong>{solved ? 'Done' : isPaused ? 'Paused' : hasStarted ? 'Live' : 'Ready'}</strong>
               <span>Status</span>
             </div>
             <div>
@@ -280,8 +324,16 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
             </div>
           </div>
           <div className="controls">
+            <button onClick={startPuzzle} disabled={solved || (hasStarted && !isPaused)}>
+              {isPaused ? 'Resume puzzle' : 'Start puzzle'}
+            </button>
+            <button onClick={pausePuzzle} disabled={!hasStarted || isPaused || solved}>
+              Pause
+            </button>
             <button onClick={loadNewPuzzle}>New puzzle</button>
-            <button onClick={clearWrongEntries} disabled={Object.keys(invalidCells).length === 0}>Clear mistakes</button>
+            <button onClick={clearWrongEntries} disabled={!hasStarted || isPaused || Object.keys(invalidCells).length === 0}>
+              Clear mistakes
+            </button>
           </div>
           <div className={`game-result ${Object.keys(invalidCells).length === 0 ? 'success' : ''}`} role="status" aria-live="polite">
             {feedbackMessage}
@@ -295,6 +347,16 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
             <div className="empty-panel">
               <h4>Puzzle solved</h4>
               <p>Load another puzzle whenever you want a new round.</p>
+            </div>
+          ) : !hasStarted ? (
+            <div className="empty-panel">
+              <h4>Start when ready</h4>
+              <p>The timer begins only after you press start, so you can choose a difficulty before the run begins.</p>
+            </div>
+          ) : isPaused ? (
+            <div className="empty-panel">
+              <h4>Paused</h4>
+              <p>The board is locked while paused. Press resume to continue from the same time.</p>
             </div>
           ) : (
             <div className="empty-panel">

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { apiUrl } from '../utils/api'
-import { type ProfileMeta, type TodoItem } from '../utils/profile'
+import { getJournalNotes, type ProfileMeta, type TodoItem } from '../utils/profile'
 import {
   addPlannerItem,
   defaultReminderTimes,
@@ -138,7 +138,7 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
 
   const planner = meta.planner || { remindersEnabled: true, reminderTimes: defaultReminderTimes, customItems: [], completions: {} }
   const reminderTimes = getReminderTimes(planner)
-  const selectedJournal = (meta.journals?.[selectedDate] || '').trim()
+  const selectedJournalNotes = useMemo(() => getJournalNotes(meta.journals, selectedDate), [meta.journals, selectedDate])
   const selectedSummary = useMemo(() => getDaySummary(selectedDate, planner), [planner, selectedDate])
   const plannerEntries = selectedSummary.entries
   const requiredEntries = plannerEntries.filter((entry) => entry.required)
@@ -553,13 +553,20 @@ export default function PlannerBoard({ initialDate, user, token, onRequireLogin,
             <div className="section-kicker">Journal for selected date</div>
             <span className="muted">{formatPlannerDate(selectedDate)}</span>
           </div>
-          {selectedJournal ? (
-            <article className="journal-postit">
-              <div className="planner-item-copy">
-                <strong>Saved journal note</strong>
-                <span>{selectedJournal}</span>
-              </div>
-            </article>
+          {selectedJournalNotes.length > 0 ? (
+            <div className="note-stack">
+              {selectedJournalNotes
+                .slice()
+                .reverse()
+                .map((note) => (
+                  <article key={note.id} className="journal-postit note-card">
+                    <div className="planner-item-copy">
+                      <strong>{note.createdAt ? new Date(note.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Saved note'}</strong>
+                      <span>{note.text}</span>
+                    </div>
+                  </article>
+                ))}
+            </div>
           ) : (
             <div className="empty-panel">
               <h4>No journal saved</h4>
