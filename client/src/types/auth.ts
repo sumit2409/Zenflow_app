@@ -2,6 +2,7 @@ export interface AuthAccount {
   username: string
   fullName: string
   email: string
+  analyticsId?: string
   emailVerified?: boolean
   authProvider?: string
   created: number | null

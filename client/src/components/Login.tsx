@@ -240,6 +240,7 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
       username: json?.username || form.username.trim(),
       fullName: json?.account?.fullName || form.fullName.trim() || json?.username || form.identifier.trim(),
       email: json?.account?.email || form.email.trim(),
+      analyticsId: json?.account?.analyticsId,
       emailVerified: Boolean(json?.account?.emailVerified),
       authProvider: json?.account?.authProvider,
       created: json?.account?.created || Date.now(),

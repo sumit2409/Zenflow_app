@@ -1,0 +1,22 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="720" rx="40" fill="#ECF2F7"/>
+  <circle cx="1026" cy="168" r="116" fill="#D8E7F0"/>
+  <circle cx="188" cy="564" r="118" fill="#F1DFCE"/>
+  <rect x="126" y="126" width="948" height="468" rx="40" fill="#FFFDFB" stroke="#C9DCE8" stroke-width="10"/>
+  <rect x="194" y="208" width="366" height="304" rx="26" fill="#F6FAFD"/>
+  <path d="M240 458H514" stroke="#CADCE8" stroke-width="10" stroke-linecap="round"/>
+  <path d="M246 418L316 352L382 390L450 286L516 320" stroke="#5E88A5" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="316" cy="352" r="11" fill="#E0A26B"/>
+  <circle cx="382" cy="390" r="11" fill="#E0A26B"/>
+  <circle cx="450" cy="286" r="11" fill="#E0A26B"/>
+  <circle cx="516" cy="320" r="11" fill="#E0A26B"/>
+  <rect x="640" y="198" width="352" height="82" rx="24" fill="#F1DFCE"/>
+  <rect x="640" y="320" width="352" height="82" rx="24" fill="#D8E7F0"/>
+  <rect x="640" y="442" width="352" height="82" rx="24" fill="#F1DFCE"/>
+  <text x="668" y="248" fill="#445E72" font-family="Manrope, sans-serif" font-size="26" font-weight="700">Sessions completed</text>
+  <text x="668" y="370" fill="#445E72" font-family="Manrope, sans-serif" font-size="26" font-weight="700">Focused minutes</text>
+  <text x="668" y="492" fill="#445E72" font-family="Manrope, sans-serif" font-size="26" font-weight="700">Interruption pattern</text>
+  <path d="M984 240L1030 274L1090 194" stroke="#5F8EA7" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M984 362L1030 396L1090 316" stroke="#5F8EA7" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M984 484L1030 518L1090 438" stroke="#5F8EA7" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

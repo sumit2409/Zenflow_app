@@ -423,12 +423,23 @@ function buildAccount(user) {
     username: user.username,
     fullName: user.fullName || user.username,
     email: user.email || '',
+    analyticsId: buildAnalyticsUserId(user),
     authProvider: user.authProvider || (user.googleId ? 'google' : 'local'),
     created: user.created || null,
     lastLoginAt: user.lastLoginAt || null,
     loginCount: Number(user.loginCount || 0),
     emailVerified: isEmailVerified(user),
   }
+}
+
+function buildAnalyticsUserId(user) {
+  const seed = user?._id || user?.id || user?.usernameLower || user?.username || user?.emailLower || user?.email
+  if (!seed) return null
+
+  return crypto
+    .createHmac('sha256', `${JWT_SECRET}:ga4-user-id`)
+    .update(String(seed))
+    .digest('hex')
 }
 
 async function generateUniqueDbUsername(seed) {

@@ -8,9 +8,11 @@ import ProfileCenter from './components/ProfileCenter'
 import BrainArcade from './components/BrainArcade'
 import MarketingLanding from './components/MarketingLanding'
 import BreakRoom from './components/BreakRoom'
+import { BlogIndexPage, BlogArticlePage, BlogPreviewSection, blogPageMeta, isBlogArticleId, type BlogArticleId } from './components/BlogPages'
 import type { AuthAccount, StoredSession } from './types/auth'
 import type { GoalIntent } from './types/experience'
 import { apiUrl } from './utils/api'
+import { identifyAnalyticsUser, resetAnalyticsUser, trackLogin, trackPageView } from './utils/analytics'
 import type { ProfileMeta } from './utils/profile'
 import PlannerBoard from './components/PlannerBoard'
 import { schedulePlannerNotifications } from './utils/planner'
@@ -79,18 +81,161 @@ function formatDateLabel(value: number | string | null | undefined) {
   })
 }
 
-const STATIC_PAGES: readonly StaticPageId[] = ['privacy', 'terms', 'cookie', 'about', 'contact', 'faq']
+type PublicPageRoute =
+  | { kind: 'static'; id: StaticPageId }
+  | { kind: 'blogIndex' }
+  | { kind: 'blogArticle'; id: BlogArticleId }
 
-function resolveStaticPage(hash: string): StaticPageId | null {
-  if (!hash.startsWith('#/')) return null
-  const trimmed = hash.replace(/^#\//, '').replace(/\/+$/, '').toLowerCase()
-  return STATIC_PAGES.includes(trimmed as StaticPageId) ? (trimmed as StaticPageId) : null
+const STATIC_PAGES: readonly StaticPageId[] = ['privacy', 'terms', 'cookie', 'about', 'contact', 'faq']
+const ADSENSE_CLIENT = 'ca-pub-8360208538374772'
+const ADSENSE_SCRIPT_ID = 'zenflow-adsense-script'
+
+function normalizePublicPath(raw: string) {
+  const trimmed = raw.trim().replace(/\/+$/, '').toLowerCase()
+  if (!trimmed || trimmed === '#') return '/'
+
+  const withoutHash = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed
+  if (!withoutHash) return '/'
+  return withoutHash.startsWith('/') ? withoutHash : `/${withoutHash}`
+}
+
+function resolvePublicPage(pathname: string, hash: string): PublicPageRoute | null {
+  const directPath = normalizePublicPath(pathname)
+  const candidatePath = directPath !== '/' ? directPath : hash.startsWith('#/') ? normalizePublicPath(hash) : '/'
+
+  if (candidatePath === '/blog') {
+    return { kind: 'blogIndex' }
+  }
+
+  const slug = candidatePath.replace(/^\//, '')
+  if (STATIC_PAGES.includes(slug as StaticPageId)) {
+    return { kind: 'static', id: slug as StaticPageId }
+  }
+
+  if (isBlogArticleId(slug)) {
+    return { kind: 'blogArticle', id: slug }
+  }
+
+  return null
+}
+
+function getPublicPagePath(page: PublicPageRoute) {
+  if (page.kind === 'blogIndex') return '/blog'
+  if (page.kind === 'blogArticle') return `/${page.id}`
+  return `/${page.id}`
+}
+
+function getPublicPageMeta(page: PublicPageRoute) {
+  if (page.kind === 'blogIndex') return blogPageMeta.blog
+  if (page.kind === 'blogArticle') return blogPageMeta[page.id]
+  return staticPageMeta[page.id]
+}
+
+function getPublicPageLabel(page: PublicPageRoute) {
+  return getPublicPageMeta(page).title
 }
 
 function setDescriptionMeta(content: string) {
   const metaTag = document.querySelector('meta[name="description"]')
   if (metaTag) {
     metaTag.setAttribute('content', content)
+  }
+}
+
+function setMetaValue(selector: string, attribute: 'content' | 'href', value: string) {
+  const element = document.querySelector(selector)
+  if (element) {
+    element.setAttribute(attribute, value)
+  }
+}
+
+function applyDocumentMeta(title: string, description: string, path: string) {
+  const absoluteUrl = new URL(path, window.location.origin).toString()
+  document.title = title
+  setDescriptionMeta(description)
+  setMetaValue('meta[property="og:title"]', 'content', title)
+  setMetaValue('meta[property="og:description"]', 'content', description)
+  setMetaValue('meta[property="og:url"]', 'content', absoluteUrl)
+  setMetaValue('meta[name="twitter:title"]', 'content', title)
+  setMetaValue('meta[name="twitter:description"]', 'content', description)
+  setMetaValue('link[rel="canonical"]', 'href', absoluteUrl)
+}
+
+function resolveTrackedPage(selected: string | null, activePublicPage: PublicPageRoute | null, hasAccount: boolean) {
+  if (activePublicPage) {
+    if (activePublicPage.kind === 'blogIndex') {
+      return {
+        key: 'public:blog',
+        name: blogPageMeta.blog.title,
+        path: '/blog',
+        section: 'public' as const,
+        kind: 'blog' as const,
+        authenticated: hasAccount,
+      }
+    }
+
+    if (activePublicPage.kind === 'blogArticle') {
+      return {
+        key: `public:${activePublicPage.id}`,
+        name: blogPageMeta[activePublicPage.id].title,
+        path: `/${activePublicPage.id}`,
+        section: 'public' as const,
+        kind: 'blog' as const,
+        authenticated: hasAccount,
+      }
+    }
+
+    return {
+      key: `public:${activePublicPage.id}`,
+      name: staticPageMeta[activePublicPage.id].title,
+      path: `/${activePublicPage.id}`,
+      section: 'public' as const,
+      kind: 'static' as const,
+      authenticated: hasAccount,
+    }
+  }
+
+  if (selected) {
+    const viewMap: Record<string, { name: string; path: string; kind: 'tool' | 'dashboard' }> = {
+      pomodoro: { name: 'Focus Timer', path: '/app/focus-timer', kind: 'tool' },
+      meditation: { name: 'Meditation', path: '/app/meditation', kind: 'tool' },
+      sudoku: { name: 'Sudoku', path: '/app/sudoku', kind: 'tool' },
+      arcade: { name: 'Games', path: '/app/games', kind: 'tool' },
+      breakroom: { name: 'Break Room', path: '/app/break-room', kind: 'tool' },
+      planner: { name: 'Planner', path: '/app/planner', kind: 'dashboard' },
+      profile: { name: 'Account', path: '/app/account', kind: 'dashboard' },
+    }
+    const tracked = viewMap[selected]
+    if (tracked) {
+      return {
+        key: `${hasAccount ? 'app' : 'public'}:${selected}`,
+        name: tracked.name,
+        path: tracked.path,
+        section: hasAccount ? ('app' as const) : ('public' as const),
+        kind: tracked.kind,
+        authenticated: hasAccount,
+      }
+    }
+  }
+
+  if (hasAccount) {
+    return {
+      key: 'app:dashboard',
+      name: 'Dashboard',
+      path: '/app/dashboard',
+      section: 'app' as const,
+      kind: 'dashboard' as const,
+      authenticated: true,
+    }
+  }
+
+  return {
+    key: 'public:landing',
+    name: 'Landing',
+    path: '/',
+    section: 'public' as const,
+    kind: 'landing' as const,
+    authenticated: false,
   }
 }
 
@@ -111,13 +256,16 @@ export default function App() {
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [goalIntent, setGoalIntent] = useState<GoalIntent | null>(null)
-  const [activeStaticPage, setActiveStaticPage] = useState<StaticPageId | null>(resolveStaticPage(window.location.hash))
+  const [activePublicPage, setActivePublicPage] = useState<PublicPageRoute | null>(
+    () => resolvePublicPage(window.location.pathname, window.location.hash),
+  )
   const [plannerFocusDate, setPlannerFocusDate] = useState(todayKey())
   const [penguinOffset, setPenguinOffset] = useState({ x: 0, y: 0 })
   const [penguinHopping, setPenguinHopping] = useState(false)
   const [penguinKissing, setPenguinKissing] = useState(false)
   const overlayRef = useRef<HTMLDivElement>(null)
   const authTriggerRef = useRef<HTMLElement | null>(null)
+  const previousAccountRef = useRef<AuthAccount | null>(initialSession?.account || null)
 
   const user = account?.username || null
   const guestLandingMode = !account && !selected
@@ -134,31 +282,55 @@ export default function App() {
     { id: 'profile', label: 'Account' },
   ]
   const visibleDesktopNav = desktopNavItems.filter((item) => item.label.toLowerCase().includes(navSearch.trim().toLowerCase()))
+  const blogRouteActive = activePublicPage?.kind === 'blogIndex' || activePublicPage?.kind === 'blogArticle'
+  const landingSectionPrefix = activePublicPage ? '/' : ''
 
   function showToast(msg: string) {
     setToastMsg(msg)
     window.setTimeout(() => setToastMsg(null), 3000)
   }
 
-  function clearStaticRoute() {
-    if (window.location.hash.startsWith('#/')) {
-      window.location.hash = ''
+  function navigatePublicPage(page: PublicPageRoute | null, historyMode: 'push' | 'replace' = 'push') {
+    const nextPath = page ? getPublicPagePath(page) : '/'
+    const hashRouteActive = window.location.hash.startsWith('#/')
+    const pathUnchanged = window.location.pathname === nextPath && !hashRouteActive
+
+    setActivePublicPage(page)
+
+    if (!pathUnchanged) {
+      const updateHistory = historyMode === 'replace' ? window.history.replaceState : window.history.pushState
+      updateHistory.call(window.history, { zenflowPublic: true }, '', nextPath)
     }
-    setActiveStaticPage(null)
+
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }
+
+  function clearPublicRoute() {
+    navigatePublicPage(null)
   }
 
   function openStaticPage(page: StaticPageId) {
-    setActiveStaticPage(page)
     setSelected(null)
     setFocusedTaskId(null)
     setGoalIntent(null)
-    window.location.hash = `#/${page}`
+    navigatePublicPage({ kind: 'static', id: page })
   }
 
-  function closeStaticPage() {
-    setActiveStaticPage(null)
+  function openBlogIndex() {
     setSelected(null)
-    window.location.hash = ''
+    setFocusedTaskId(null)
+    navigatePublicPage({ kind: 'blogIndex' })
+  }
+
+  function openBlogArticle(articleId: BlogArticleId) {
+    setSelected(null)
+    setFocusedTaskId(null)
+    navigatePublicPage({ kind: 'blogArticle', id: articleId })
+  }
+
+  function closePublicPage() {
+    setSelected(null)
+    navigatePublicPage(null)
   }
 
   useEffect(() => {
@@ -198,8 +370,8 @@ export default function App() {
 
   useEffect(() => {
     const syncRoute = () => {
-      const nextPage = resolveStaticPage(window.location.hash)
-      setActiveStaticPage(nextPage)
+      const nextPage = resolvePublicPage(window.location.pathname, window.location.hash)
+      setActivePublicPage(nextPage)
       if (nextPage) {
         setSelected(null)
         setFocusedTaskId(null)
@@ -207,8 +379,10 @@ export default function App() {
     }
 
     syncRoute()
+    window.addEventListener('popstate', syncRoute)
     window.addEventListener('hashchange', syncRoute)
     return () => {
+      window.removeEventListener('popstate', syncRoute)
       window.removeEventListener('hashchange', syncRoute)
     }
   }, [])
@@ -306,6 +480,26 @@ export default function App() {
   }, [profileMeta.appearance?.theme])
 
   useEffect(() => {
+    const script = document.getElementById(ADSENSE_SCRIPT_ID)
+    const shouldLoadAds = !account && !selected && !showLogin
+
+    if (!shouldLoadAds) {
+      script?.remove()
+      document.querySelectorAll('.google-auto-placed').forEach((node) => node.remove())
+      return
+    }
+
+    if (script) return
+
+    const nextScript = document.createElement('script')
+    nextScript.id = ADSENSE_SCRIPT_ID
+    nextScript.async = true
+    nextScript.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`
+    nextScript.crossOrigin = 'anonymous'
+    document.head.appendChild(nextScript)
+  }, [account, selected, showLogin])
+
+  useEffect(() => {
     const positions = [
       { x: 0, y: 0 },
       { x: -24, y: -8 },
@@ -334,8 +528,8 @@ export default function App() {
   }
 
   const setView = (view: string | null) => {
-    if (activeStaticPage) {
-      clearStaticRoute()
+    if (activePublicPage) {
+      clearPublicRoute()
     }
     setSelected(view)
   }
@@ -357,33 +551,49 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (activeStaticPage) {
-      document.title = `${staticPageMeta[activeStaticPage].title} — Zenflow`
-      setDescriptionMeta(staticPageMeta[activeStaticPage].description)
+    if (activePublicPage) {
+      const meta = getPublicPageMeta(activePublicPage)
+      applyDocumentMeta(`${meta.title} — Zenflow`, meta.description, getPublicPagePath(activePublicPage))
     } else if (selected && viewTitles[selected]) {
-      document.title = viewTitles[selected]
-      setDescriptionMeta('Zenflow tools for focus, meditation, task planning, and daily rhythm.')
+      const trackedPage = resolveTrackedPage(selected, null, Boolean(account))
+      applyDocumentMeta(viewTitles[selected], 'Zenflow tools for focus, meditation, task planning, and daily rhythm.', trackedPage.path)
     } else if (account) {
-      document.title = 'Dashboard — Zenflow'
-      setDescriptionMeta('Zenflow dashboard with your account, planner, and progress in one place.')
+      applyDocumentMeta('Dashboard — Zenflow', 'Zenflow dashboard with your account, planner, and progress in one place.', '/app/dashboard')
     } else {
-      document.title = 'Zenflow | Focus, Tasks, and Daily Rhythm'
-      setDescriptionMeta('Zenflow combines focus timers, planner tools, daily notes, and calm breaks in one clean flow.')
+      applyDocumentMeta(
+        'Zenflow | Focus, Tasks, and Daily Rhythm',
+        'Zenflow combines focus timers, planner tools, daily notes, calm breaks, and public focus articles in one clean flow.',
+        '/',
+      )
     }
-  }, [selected, account, activeStaticPage])
+  }, [selected, account, activePublicPage])
+
+  useEffect(() => {
+    if (account) {
+      identifyAnalyticsUser(account)
+    } else if (previousAccountRef.current) {
+      resetAnalyticsUser()
+    }
+
+    previousAccountRef.current = account
+  }, [account])
+
+  useEffect(() => {
+    if (isValidating) return
+
+    const trackedPage = resolveTrackedPage(selected, activePublicPage, Boolean(account))
+    trackPageView(trackedPage)
+  }, [selected, activePublicPage, account, isValidating])
 
   function openPlannerAt(dateKey: string) {
-    if (activeStaticPage) {
-      clearStaticRoute()
+    if (activePublicPage) {
+      clearPublicRoute()
     }
     setPlannerFocusDate(dateKey)
     setSelected('planner')
   }
 
   function openAuth(mode: 'login' | 'register', goal?: GoalIntent) {
-    if (activeStaticPage) {
-      clearStaticRoute()
-    }
     authTriggerRef.current = document.activeElement as HTMLElement
     setAuthMode(mode)
     if (goal) setGoalIntent(goal)
@@ -402,8 +612,8 @@ export default function App() {
   }
 
   function handleBottomNav(section: 'home' | 'dashboard' | 'tools' | 'activity' | 'profile') {
-    if (activeStaticPage) {
-      clearStaticRoute()
+    if (activePublicPage) {
+      clearPublicRoute()
     }
 
     if (section === 'home') {
@@ -443,19 +653,32 @@ export default function App() {
 
   function handleOpenFocusTask(taskId: string | null) {
     if (!taskId) return
-    if (activeStaticPage) {
-      clearStaticRoute()
+    if (activePublicPage) {
+      clearPublicRoute()
     }
     setFocusedTaskId(taskId)
     setSelected('pomodoro')
   }
 
-  function renderStaticPage(page: StaticPageId) {
-    if (page === 'privacy') return <PrivacyPolicyPage />
-    if (page === 'terms') return <TermsOfServicePage />
-    if (page === 'cookie') return <CookiePolicyPage />
-    if (page === 'about') return <AboutPage />
-    if (page === 'faq') return <FAQPage />
+  function renderPublicPage(page: PublicPageRoute) {
+    if (page.kind === 'blogIndex') {
+      return <BlogIndexPage onOpenArticle={openBlogArticle} onOpenAuth={openAuth} />
+    }
+    if (page.kind === 'blogArticle') {
+      return (
+        <BlogArticlePage
+          articleId={page.id}
+          onOpenIndex={openBlogIndex}
+          onOpenArticle={openBlogArticle}
+          onOpenAuth={openAuth}
+        />
+      )
+    }
+    if (page.id === 'privacy') return <PrivacyPolicyPage />
+    if (page.id === 'terms') return <TermsOfServicePage />
+    if (page.id === 'cookie') return <CookiePolicyPage />
+    if (page.id === 'about') return <AboutPage />
+    if (page.id === 'faq') return <FAQPage />
     return <ContactPage onNotify={showToast} />
   }
 
@@ -541,10 +764,11 @@ export default function App() {
             )
           ) : (
             <>
-              <a className="nav-link" href="#start">Home</a>
-              <a className="nav-link" href="#plans">Features</a>
-              <a className="nav-link" href="#overview">Overview</a>
-              <a className="nav-link" href="#about">About</a>
+              <a className="nav-link" href={`${landingSectionPrefix}#start`}>Home</a>
+              <a className="nav-link" href={`${landingSectionPrefix}#plans`}>Features</a>
+              <a className="nav-link" href={`${landingSectionPrefix}#overview`}>Overview</a>
+              <button type="button" className={`nav-link ${blogRouteActive ? 'active' : ''}`} onClick={openBlogIndex}>Blog</button>
+              <a className="nav-link" href={`${landingSectionPrefix}#about`}>About</a>
             </>
           )}
         </nav>
@@ -585,18 +809,26 @@ export default function App() {
         </div>
       </header>
       <main>
-        {activeStaticPage ? (
+        {activePublicPage ? (
           <section className="legal-page-wrap fade-rise">
-            <InfoPageBreadcrumb label={staticPageMeta[activeStaticPage].title} />
+            <InfoPageBreadcrumb label={getPublicPageLabel(activePublicPage)} />
             <div className="legal-page-actions">
-              <button className="back tool-back-btn" onClick={closeStaticPage}>
+              <button className="back tool-back-btn" onClick={closePublicPage}>
                 &larr; Back to home
               </button>
+              {activePublicPage.kind === 'blogArticle' && (
+                <button type="button" className="ghost-btn" onClick={openBlogIndex}>
+                  Browse all articles
+                </button>
+              )}
             </div>
-            {renderStaticPage(activeStaticPage)}
+            {renderPublicPage(activePublicPage)}
             <footer className="site-footer legal-footer">
               <span>Zenflow</span>
-              <SiteFooterLinks onNavigate={openStaticPage} />
+              <div className="footer-links-group" aria-label="Public links">
+                <button type="button" className="ghost-btn" onClick={openBlogIndex}>Blog</button>
+                <SiteFooterLinks onNavigate={openStaticPage} />
+              </div>
             </footer>
           </section>
         ) : !selected ? (
@@ -666,11 +898,17 @@ export default function App() {
                 </section>
               </>
             ) : (
-              <MarketingLanding onOpenAuth={openAuth} />
+              <>
+                <MarketingLanding onOpenAuth={openAuth} />
+                <BlogPreviewSection onOpenIndex={openBlogIndex} onOpenArticle={openBlogArticle} />
+              </>
             )}
             <footer className="site-footer legal-footer fade-rise">
               <span>Zenflow</span>
-              <SiteFooterLinks onNavigate={openStaticPage} />
+              <div className="footer-links-group" aria-label="Public links">
+                <button type="button" className="ghost-btn" onClick={openBlogIndex}>Blog</button>
+                <SiteFooterLinks onNavigate={openStaticPage} />
+              </div>
             </footer>
           </>
         ) : (
@@ -760,6 +998,8 @@ export default function App() {
               setAccount(nextAccount)
               setToken(nextToken)
               persistSession(nextSession, remember)
+              identifyAnalyticsUser(nextAccount)
+              trackLogin(nextAccount)
               setGoalIntent(null)
               setShowLogin(false)
             }}
