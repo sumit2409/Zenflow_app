@@ -1,48 +1,63 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://zenflow-api.onrender.com/</loc>
+    <loc>https://zenflow.bio/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://zenflow-api.onrender.com/blog</loc>
+    <loc>https://zenflow.bio/blog</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://zenflow-api.onrender.com/beat-phone-addiction</loc>
+    <loc>https://zenflow.bio/beat-phone-addiction</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://zenflow-api.onrender.com/dopamine-detox-guide</loc>
+    <loc>https://zenflow.bio/dopamine-detox-guide</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://zenflow-api.onrender.com/deep-work-system</loc>
+    <loc>https://zenflow.bio/deep-work-system</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://zenflow-api.onrender.com/focus-tracking</loc>
+    <loc>https://zenflow.bio/focus-tracking</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://zenflow-api.onrender.com/about</loc>
+    <loc>https://zenflow.bio/about</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://zenflow-api.onrender.com/faq</loc>
+    <loc>https://zenflow.bio/faq</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://zenflow-api.onrender.com/contact</loc>
+    <loc>https://zenflow.bio/contact</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://zenflow.bio/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://zenflow.bio/terms</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://zenflow.bio/cookie</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
   </url>
 </urlset>

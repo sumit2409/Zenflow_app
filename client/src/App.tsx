@@ -89,6 +89,7 @@ type PublicPageRoute =
 const STATIC_PAGES: readonly StaticPageId[] = ['privacy', 'terms', 'cookie', 'about', 'contact', 'faq']
 const ADSENSE_CLIENT = 'ca-pub-8360208538374772'
 const ADSENSE_SCRIPT_ID = 'zenflow-adsense-script'
+const SITE_ORIGIN = 'https://zenflow.bio'
 
 function normalizePublicPath(raw: string) {
   const trimmed = raw.trim().replace(/\/+$/, '').toLowerCase()
@@ -150,7 +151,7 @@ function setMetaValue(selector: string, attribute: 'content' | 'href', value: st
 }
 
 function applyDocumentMeta(title: string, description: string, path: string) {
-  const absoluteUrl = new URL(path, window.location.origin).toString()
+  const absoluteUrl = new URL(path, SITE_ORIGIN).toString()
   document.title = title
   setDescriptionMeta(description)
   setMetaValue('meta[property="og:title"]', 'content', title)
