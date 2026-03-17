@@ -13,3 +13,17 @@ services:
         sync: false
       - key: ZENFLOW_SECRET
         sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: ADMIN_BROADCAST_KEY
+        sync: false
+      - key: WEEKLY_WELLNESS_EMAILS_ENABLED
+        sync: false
+      - key: WEEKLY_WELLNESS_EMAILS_DAY_UTC
+        sync: false
+      - key: WEEKLY_WELLNESS_EMAILS_HOUR_UTC
+        sync: false
+      - key: WEEKLY_WELLNESS_EMAILS_MINUTE_UTC
+        sync: false

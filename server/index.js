@@ -29,6 +29,14 @@ const ADMIN_BROADCAST_KEY = String(process.env.ADMIN_BROADCAST_KEY || '').trim()
 const DEFAULT_APK_DIRECT_URL = 'https://raw.githubusercontent.com/sumit2409/Zenflow_app/main/downloads/zenflow-app.apk'
 const DEFAULT_APK_FALLBACK_URL = 'https://github.com/sumit2409/Zenflow_app/releases'
 const APK_DOWNLOAD_URL = String(process.env.APK_DOWNLOAD_URL || '').trim()
+const DEFAULT_WEBSITE_URL = 'https://zenflow.bio'
+const WEBSITE_URL = (PUBLIC_APP_URL || DEFAULT_WEBSITE_URL).trim().replace(/\/+$/, '')
+const WEEKLY_WELLNESS_EMAILS_ENABLED = String(process.env.WEEKLY_WELLNESS_EMAILS_ENABLED || '').trim() === 'true'
+const WEEKLY_WELLNESS_EMAILS_DAY_UTC = clampIntegerEnv(process.env.WEEKLY_WELLNESS_EMAILS_DAY_UTC, 1, 0, 6)
+const WEEKLY_WELLNESS_EMAILS_HOUR_UTC = clampIntegerEnv(process.env.WEEKLY_WELLNESS_EMAILS_HOUR_UTC, 9, 0, 23)
+const WEEKLY_WELLNESS_EMAILS_MINUTE_UTC = clampIntegerEnv(process.env.WEEKLY_WELLNESS_EMAILS_MINUTE_UTC, 0, 0, 59)
+const WEEKLY_WELLNESS_EMAILS_INTERVAL_MS = 15 * 60 * 1000
+const WEEKLY_WELLNESS_LAST_SENT_SETTING_KEY = 'campaign:weekly-wellness:last-sent-week'
 
 const DATA_FILE = path.join(__dirname, 'data.json')
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
@@ -41,6 +49,14 @@ const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : nul
 let mailTransporter = null
 
 let useFileStorage = false
+let weeklyWellnessInterval = null
+let weeklyWellnessJobRunning = false
+
+function clampIntegerEnv(rawValue, fallback, min, max) {
+  const parsed = Number(rawValue)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, Math.floor(parsed)))
+}
 
 const userSchema = new mongoose.Schema({
   username: { type: String, unique: true },
@@ -62,10 +78,15 @@ const userSchema = new mongoose.Schema({
 })
 const logSchema = new mongoose.Schema({ user: String, date: String, type: String, value: Number })
 const metaSchema = new mongoose.Schema({ user: String, meta: mongoose.Schema.Types.Mixed })
+const settingSchema = new mongoose.Schema({
+  key: { type: String, unique: true },
+  value: mongoose.Schema.Types.Mixed,
+})
 
 let User
 let Log
 let Meta
+let Setting
 
 function normalizeUsername(username) {
   return String(username || '').trim()
@@ -124,9 +145,14 @@ function validateRegistration({ username, email, fullName, password, confirmPass
 
 function readData() {
   if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify({ users: {}, logs: {}, meta: {} }, null, 2), 'utf8')
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ users: {}, logs: {}, meta: {}, system: {} }, null, 2), 'utf8')
   }
-  return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))
+  const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))
+  parsed.users = parsed.users || {}
+  parsed.logs = parsed.logs || {}
+  parsed.meta = parsed.meta || {}
+  parsed.system = parsed.system || {}
+  return parsed
 }
 
 function writeData(data) {
@@ -376,7 +402,7 @@ async function sendEmailVerificationEmail({ to, fullName, code, verifyUrl }) {
   })
 }
 
-function buildCommunityAnnouncementEmail({ fullName, downloadUrl, websiteUrl = 'https://zenflow.bio' }) {
+function buildCommunityAnnouncementEmail({ fullName, downloadUrl, websiteUrl = WEBSITE_URL }) {
   const safeName = sanitizeFullName(fullName) || 'there'
   return {
     subject: 'Zenflow Android app update for our earliest community members',
@@ -415,6 +441,272 @@ async function sendCommunityAnnouncementEmail({ to, fullName, preferredProvider 
     html: mail.html,
     preferredProvider,
   })
+}
+
+function buildWeeklyWellnessReminderEmail({ fullName, websiteUrl = WEBSITE_URL }) {
+  const safeName = sanitizeFullName(fullName) || 'there'
+  return {
+    subject: 'A gentle weekly wellness check-in from Zenflow',
+    text: [
+      `Hi ${safeName},`,
+      '',
+      'This is your weekly reminder to keep going on your wellness journey, one small step at a time.',
+      'If you need help getting back into rhythm, you can always use Zenflow for focus sessions, planning, meditation, Sudoku, and quick reset games.',
+      '',
+      'We are still new, and you are one of our first few users.',
+      'Any feedback on our website, your ideas, or simply spreading the word matters a lot to us.',
+      'Let us grow together with you.',
+      '',
+      `Visit Zenflow: ${websiteUrl}`,
+      '',
+      'With gratitude,',
+      'The Zenflow team',
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.7;color:#2f241e;background:#f8f2eb;padding:32px 20px">
+        <div style="max-width:620px;margin:0 auto;background:#fffaf5;border:1px solid #e7d8ca;border-radius:22px;overflow:hidden">
+          <div style="padding:28px 28px 18px;background:linear-gradient(135deg,#fff6eb 0%,#f3e5d7 100%)">
+            <div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#f2dfd2;color:#bc6c47;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Weekly check-in</div>
+            <h1 style="margin:16px 0 10px;font-size:28px;line-height:1.1;color:#2f241e">Keep going on your wellness journey</h1>
+            <p style="margin:0;color:#5f5249;font-size:15px">A small reminder from the Zenflow team to stay steady, take care of yourself, and come back to the tools whenever you need them.</p>
+          </div>
+          <div style="padding:26px 28px 30px">
+            <p style="margin-top:0">Hi ${safeName},</p>
+            <p>This is your weekly reminder to keep going on your wellness journey, one small step at a time.</p>
+            <p>If you need help getting back into rhythm, you can always use Zenflow for focus sessions, planning, meditation, Sudoku, and quick reset games.</p>
+            <p>We are still new, and you are one of our first few users. Any feedback on our website, your ideas, or simply spreading the word matters a lot to us.</p>
+            <p style="margin-bottom:24px">Let us grow together with you.</p>
+            <p style="margin:0 0 28px">
+              <a href="${websiteUrl}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#bc6c47;color:#fffaf5;text-decoration:none;font-weight:700">Visit Zenflow</a>
+            </p>
+            <p style="margin-bottom:0">With gratitude,<br />The Zenflow team</p>
+          </div>
+        </div>
+      </div>
+    `,
+  }
+}
+
+async function sendWeeklyWellnessReminderEmail({ to, fullName, preferredProvider = 'auto', websiteUrl }) {
+  const mail = buildWeeklyWellnessReminderEmail({ fullName, websiteUrl })
+  return sendTransactionalEmail({
+    to,
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html,
+    preferredProvider,
+  })
+}
+
+function buildIsoWeekKey(date = new Date()) {
+  const current = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+  const day = current.getUTCDay() || 7
+  current.setUTCDate(current.getUTCDate() + 4 - day)
+  const yearStart = new Date(Date.UTC(current.getUTCFullYear(), 0, 1))
+  const week = Math.ceil((((current - yearStart) / 86400000) + 1) / 7)
+  return `${current.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
+}
+
+function getIsoWeekStart(date = new Date()) {
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+  const day = start.getUTCDay() || 7
+  start.setUTCDate(start.getUTCDate() - day + 1)
+  start.setUTCHours(0, 0, 0, 0)
+  return start
+}
+
+function getIsoDayOffsetFromUtcDay(day) {
+  return day === 0 ? 6 : day - 1
+}
+
+function getWeeklyWellnessScheduledAt(date = new Date()) {
+  const scheduledAt = getIsoWeekStart(date)
+  scheduledAt.setUTCDate(scheduledAt.getUTCDate() + getIsoDayOffsetFromUtcDay(WEEKLY_WELLNESS_EMAILS_DAY_UTC))
+  scheduledAt.setUTCHours(WEEKLY_WELLNESS_EMAILS_HOUR_UTC, WEEKLY_WELLNESS_EMAILS_MINUTE_UTC, 0, 0)
+  return scheduledAt
+}
+
+function getWeeklyWellnessScheduleLabel() {
+  return `UTC day ${WEEKLY_WELLNESS_EMAILS_DAY_UTC} at ${String(WEEKLY_WELLNESS_EMAILS_HOUR_UTC).padStart(2, '0')}:${String(WEEKLY_WELLNESS_EMAILS_MINUTE_UTC).padStart(2, '0')}`
+}
+
+async function getSystemSetting(key) {
+  if (useFileStorage) {
+    const data = readData()
+    return data.system?.[key] ?? null
+  }
+
+  if (!Setting) return null
+  const entry = await Setting.findOne({ key }).lean().exec()
+  return entry ? entry.value : null
+}
+
+async function setSystemSetting(key, value) {
+  if (useFileStorage) {
+    const data = readData()
+    data.system = data.system || {}
+    data.system[key] = value
+    writeData(data)
+    return
+  }
+
+  if (!Setting) return
+  await Setting.findOneAndUpdate({ key }, { value }, { upsert: true }).exec()
+}
+
+function userCanReceiveCampaigns(user) {
+  return Boolean(normalizeEmail(user?.email || user?.emailLower || '')) && isEmailVerified(user)
+}
+
+function buildCampaignRecipient(user) {
+  const email = normalizeEmail(user?.email || user?.emailLower || '')
+  if (!email) return null
+  return {
+    email,
+    fullName: sanitizeFullName(user?.fullName || user?.username || email.split('@')[0] || 'there'),
+    username: normalizeUsername(user?.username || ''),
+  }
+}
+
+async function collectCampaignRecipients({ only = '', limit = null } = {}) {
+  if (only) {
+    const directEmail = normalizeEmail(only)
+    return directEmail
+      ? [{ email: directEmail, fullName: directEmail.split('@')[0] || 'there', username: directEmail.split('@')[0] || '' }]
+      : []
+  }
+
+  let recipients = []
+
+  if (useFileStorage) {
+    const data = readData()
+    recipients = Object.values(data.users || {})
+      .filter(userCanReceiveCampaigns)
+      .map(buildCampaignRecipient)
+      .filter(Boolean)
+  } else {
+    const users = await User.find({ email: { $exists: true, $ne: '' } })
+      .select({ email: 1, emailLower: 1, fullName: 1, username: 1, emailVerified: 1, googleId: 1 })
+      .lean()
+      .exec()
+
+    recipients = users
+      .filter(userCanReceiveCampaigns)
+      .map(buildCampaignRecipient)
+      .filter(Boolean)
+  }
+
+  const deduped = []
+  const seen = new Set()
+  for (const recipient of recipients) {
+    if (!recipient.email || seen.has(recipient.email)) continue
+    seen.add(recipient.email)
+    deduped.push(recipient)
+  }
+
+  return limit ? deduped.slice(0, limit) : deduped
+}
+
+async function runWeeklyWellnessCampaign({ preferredProvider = 'auto', dryRun = false, limit = null, only = '', force = false } = {}) {
+  const weekKey = buildIsoWeekKey(new Date())
+  const alreadySentWeek = await getSystemSetting(WEEKLY_WELLNESS_LAST_SENT_SETTING_KEY)
+  if (!only && !force && alreadySentWeek === weekKey) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'already sent this week',
+      weekKey,
+      schedule: getWeeklyWellnessScheduleLabel(),
+      totalRecipients: 0,
+      sent: 0,
+      failed: 0,
+      failures: [],
+    }
+  }
+
+  const recipients = await collectCampaignRecipients({ only, limit })
+  if (dryRun) {
+    return {
+      ok: true,
+      dryRun: true,
+      skipped: false,
+      weekKey,
+      schedule: getWeeklyWellnessScheduleLabel(),
+      totalRecipients: recipients.length,
+      recipients: recipients.slice(0, 25).map((item) => item.email),
+      sent: 0,
+      failed: 0,
+      failures: [],
+    }
+  }
+
+  const sent = []
+  const failures = []
+
+  for (const recipient of recipients) {
+    try {
+      const result = await sendWeeklyWellnessReminderEmail({
+        to: recipient.email,
+        fullName: recipient.fullName || recipient.username || 'there',
+        preferredProvider,
+        websiteUrl: WEBSITE_URL,
+      })
+      if (!result.delivered) {
+        failures.push({ email: recipient.email, reason: `${result.provider || preferredProvider} delivery failed` })
+        continue
+      }
+      sent.push({ email: recipient.email, provider: result.provider || preferredProvider })
+    } catch (error) {
+      failures.push({ email: recipient.email, reason: error?.message || 'send failed' })
+    }
+  }
+
+  if (sent.length > 0 || recipients.length === 0) {
+    await setSystemSetting(WEEKLY_WELLNESS_LAST_SENT_SETTING_KEY, weekKey)
+  }
+
+  return {
+    ok: true,
+    skipped: false,
+    weekKey,
+    schedule: getWeeklyWellnessScheduleLabel(),
+    totalRecipients: recipients.length,
+    sent: sent.length,
+    failed: failures.length,
+    failures: failures.slice(0, 25),
+  }
+}
+
+async function maybeRunWeeklyWellnessCampaign() {
+  if (!WEEKLY_WELLNESS_EMAILS_ENABLED || weeklyWellnessJobRunning) return
+  if (!((SMTP_HOST && SMTP_FROM) || (RESEND_API_KEY && RESEND_FROM))) return
+
+  const now = new Date()
+  const scheduledAt = getWeeklyWellnessScheduledAt(now)
+  if (now < scheduledAt) return
+
+  weeklyWellnessJobRunning = true
+  try {
+    const result = await runWeeklyWellnessCampaign()
+    if (!result.skipped) {
+      console.log(`[weekly-wellness] week=${result.weekKey} sent=${result.sent} failed=${result.failed}`)
+    }
+  } catch (error) {
+    console.error('[weekly-wellness] automated send failed:', error)
+  } finally {
+    weeklyWellnessJobRunning = false
+  }
+}
+
+function startWeeklyWellnessScheduler() {
+  if (!WEEKLY_WELLNESS_EMAILS_ENABLED) return
+  if (weeklyWellnessInterval) return
+
+  console.log(`[weekly-wellness] automatic emails enabled on ${getWeeklyWellnessScheduleLabel()}`)
+  void maybeRunWeeklyWellnessCampaign()
+  weeklyWellnessInterval = setInterval(() => {
+    void maybeRunWeeklyWellnessCampaign()
+  }, WEEKLY_WELLNESS_EMAILS_INTERVAL_MS)
 }
 
 function buildAccount(user) {
@@ -571,6 +863,7 @@ async function connectDb() {
     User = mongoose.model('User', userSchema)
     Log = mongoose.model('Log', logSchema)
     Meta = mongoose.model('Meta', metaSchema)
+    Setting = mongoose.model('Setting', settingSchema)
     console.log('Connected to MongoDB')
     useFileStorage = false
   } catch (err) {
@@ -586,6 +879,8 @@ async function connectDb() {
       console.error('Failed to initialize data file', fileErr)
     }
   }
+
+  startWeeklyWellnessScheduler()
 }
 
 connectDb()
@@ -697,7 +992,7 @@ app.post('/api/admin/announce/android-release', async (req, res) => {
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : null
   const onlyRaw = String(req.body?.only || '').trim().toLowerCase()
   const downloadUrl = DEFAULT_APK_DIRECT_URL
-  const websiteUrl = 'https://zenflow.bio'
+  const websiteUrl = WEBSITE_URL
 
   try {
     let recipients = []
@@ -773,6 +1068,35 @@ app.post('/api/admin/announce/android-release', async (req, res) => {
     })
   } catch (error) {
     console.error('Announcement API failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/announce/weekly-wellness', async (req, res) => {
+  const incomingKey = String(req.headers['x-admin-key'] || req.body?.adminKey || '').trim()
+  if (!ADMIN_BROADCAST_KEY || incomingKey !== ADMIN_BROADCAST_KEY) {
+    return res.status(401).json({ error: 'unauthorized' })
+  }
+
+  const provider = String(req.body?.provider || 'auto').trim().toLowerCase()
+  const preferredProvider = provider === 'smtp' ? 'smtp' : provider === 'resend' ? 'resend' : 'auto'
+  const dryRun = Boolean(req.body?.dryRun)
+  const force = Boolean(req.body?.force)
+  const limitRaw = Number(req.body?.limit || 0)
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : null
+  const only = String(req.body?.only || '').trim().toLowerCase()
+
+  try {
+    const summary = await runWeeklyWellnessCampaign({
+      preferredProvider,
+      dryRun,
+      force,
+      limit,
+      only,
+    })
+    return res.json(summary)
+  } catch (error) {
+    console.error('Weekly wellness API failed:', error)
     return res.status(500).json({ error: 'server error' })
   }
 })
