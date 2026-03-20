@@ -110,10 +110,15 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
       {isOpen && (
         <section id="zenflow-coach-panel" className="coach-panel card" aria-label="Zenflow Coach">
           <header className="coach-head">
-            <div>
-              <div className="section-kicker">Zenflow Coach</div>
-              <h3>Ask about your progress, next step, or plan.</h3>
-              <p className="coach-subline">I use your recent Zenflow activity to answer more personally.</p>
+            <div className="coach-headline">
+              <div className="coach-cat coach-cat-small" aria-hidden="true">
+                <span className="coach-cat-face" />
+              </div>
+              <div>
+                <div className="section-kicker">Zenflow Cat Coach</div>
+                <h3>Ask about your progress, next step, or plan.</h3>
+                <p className="coach-subline">I use your recent Zenflow activity to answer more personally.</p>
+              </div>
             </div>
             <button type="button" className="ghost-btn coach-close-btn" onClick={() => setIsOpen(false)} aria-label="Close coach">
               Close
@@ -191,8 +196,13 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
         aria-controls="zenflow-coach-panel"
         onClick={() => setIsOpen((current) => !current)}
       >
-        <span className="coach-launcher-badge">Coach</span>
-        <strong>Ask Zenflow</strong>
+        <span className="coach-cat" aria-hidden="true">
+          <span className="coach-cat-face" />
+        </span>
+        <span className="coach-launcher-copy">
+          <span className="coach-launcher-badge">Cat Coach</span>
+          <strong>Ask Zenflow</strong>
+        </span>
       </button>
     </div>
   )

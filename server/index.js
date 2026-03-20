@@ -27,7 +27,7 @@ const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim()
 const RESEND_FROM = String(process.env.RESEND_FROM || SMTP_FROM || '').trim()
 const ADMIN_BROADCAST_KEY = String(process.env.ADMIN_BROADCAST_KEY || '').trim()
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || '').trim()
-const GEMINI_COACH_MODEL = String(process.env.GEMINI_COACH_MODEL || 'gemini-2.0-flash-lite').trim() || 'gemini-2.0-flash-lite'
+const GEMINI_COACH_MODEL = String(process.env.GEMINI_COACH_MODEL || 'gemini-2.0-flash').trim() || 'gemini-2.0-flash'
 const DEFAULT_APK_DIRECT_URL = 'https://raw.githubusercontent.com/sumit2409/Zenflow_app/main/downloads/zenflow-app.apk'
 const DEFAULT_APK_FALLBACK_URL = 'https://github.com/sumit2409/Zenflow_app/releases'
 const APK_DOWNLOAD_URL = String(process.env.APK_DOWNLOAD_URL || '').trim()
@@ -1418,15 +1418,14 @@ async function generateCoachReply({ message, history, summary, resources }) {
     : 'No previous conversation.'
   const resourceText = resources.map((resource) => `- ${resource.label}: ${resource.description}`).join('\n')
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_COACH_MODEL)}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_COACH_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
     {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-goog-api-key': GEMINI_API_KEY,
     },
     body: JSON.stringify({
-      system_instruction: {
+      systemInstruction: {
         parts: [
           {
             text: [
@@ -1457,6 +1456,7 @@ async function generateCoachReply({ message, history, summary, resources }) {
           ],
         },
       ],
+      store: false,
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 500,
@@ -1468,7 +1468,16 @@ async function generateCoachReply({ message, history, summary, resources }) {
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`coach request failed (${response.status}): ${errorText}`)
+    let providerMessage = errorText
+
+    try {
+      const parsed = JSON.parse(errorText)
+      providerMessage = String(parsed?.error?.message || parsed?.message || errorText)
+    } catch {
+      providerMessage = errorText
+    }
+
+    throw new Error(`coach request failed (${response.status}): ${providerMessage}`)
   }
 
   const payload = await response.json()
@@ -2457,8 +2466,20 @@ app.post('/api/coach/chat', authMiddleware, async (req, res) => {
       resources,
     })
   } catch (error) {
-    console.error('Coach chat failed:', error?.message || error)
-    return res.status(500).json({ error: 'Coach could not answer right now. Please try again.' })
+    const messageText = String(error?.message || 'Coach could not answer right now. Please try again.')
+    console.error('Coach chat failed:', messageText)
+
+    const userMessage = messageText.includes('429')
+      ? 'Coach hit the current Gemini free-tier quota. Please try again later.'
+      : messageText.includes('403')
+        ? 'Coach could not access Gemini. Please recheck the API key and Gemini project access.'
+        : messageText.includes('400')
+          ? 'Coach request was rejected by Gemini. Please verify the selected Gemini model name.'
+          : messageText.includes('blocked:')
+            ? `Coach reply was blocked by Gemini safety filters: ${messageText.split('blocked:')[1].trim()}`
+            : 'Coach could not answer right now. Please try again.'
+
+    return res.status(502).json({ error: userMessage })
   }
 })
 
