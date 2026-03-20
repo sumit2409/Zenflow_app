@@ -26,17 +26,25 @@ const SMTP_RESET_BCC = String(process.env.SMTP_RESET_BCC || '').trim()
 const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim()
 const RESEND_FROM = String(process.env.RESEND_FROM || SMTP_FROM || '').trim()
 const ADMIN_BROADCAST_KEY = String(process.env.ADMIN_BROADCAST_KEY || '').trim()
+const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || '').trim()
+const GEMINI_COACH_MODEL = String(process.env.GEMINI_COACH_MODEL || 'gemini-2.0-flash-lite').trim() || 'gemini-2.0-flash-lite'
 const DEFAULT_APK_DIRECT_URL = 'https://raw.githubusercontent.com/sumit2409/Zenflow_app/main/downloads/zenflow-app.apk'
 const DEFAULT_APK_FALLBACK_URL = 'https://github.com/sumit2409/Zenflow_app/releases'
 const APK_DOWNLOAD_URL = String(process.env.APK_DOWNLOAD_URL || '').trim()
 const DEFAULT_WEBSITE_URL = 'https://zenflow.bio'
 const WEBSITE_URL = (PUBLIC_APP_URL || DEFAULT_WEBSITE_URL).trim().replace(/\/+$/, '')
+const CANONICAL_SITE_URL = new URL(WEBSITE_URL)
+const CANONICAL_ORIGIN = CANONICAL_SITE_URL.origin
+const CANONICAL_HOSTNAME = CANONICAL_SITE_URL.hostname.toLowerCase()
 const WEEKLY_WELLNESS_EMAILS_ENABLED = String(process.env.WEEKLY_WELLNESS_EMAILS_ENABLED || '').trim() === 'true'
 const WEEKLY_WELLNESS_EMAILS_DAY_UTC = clampIntegerEnv(process.env.WEEKLY_WELLNESS_EMAILS_DAY_UTC, 1, 0, 6)
 const WEEKLY_WELLNESS_EMAILS_HOUR_UTC = clampIntegerEnv(process.env.WEEKLY_WELLNESS_EMAILS_HOUR_UTC, 9, 0, 23)
 const WEEKLY_WELLNESS_EMAILS_MINUTE_UTC = clampIntegerEnv(process.env.WEEKLY_WELLNESS_EMAILS_MINUTE_UTC, 0, 0, 59)
 const WEEKLY_WELLNESS_EMAILS_INTERVAL_MS = 15 * 60 * 1000
 const WEEKLY_WELLNESS_LAST_SENT_SETTING_KEY = 'campaign:weekly-wellness:last-sent-week'
+const COACH_HISTORY_LIMIT = 10
+const COACH_MESSAGE_CHAR_LIMIT = 1600
+const COACH_RESPONSE_TIMEOUT_MS = 20000
 
 const DATA_FILE = path.join(__dirname, 'data.json')
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
@@ -51,11 +59,168 @@ let mailTransporter = null
 let useFileStorage = false
 let weeklyWellnessInterval = null
 let weeklyWellnessJobRunning = false
+let cachedIndexHtml = null
 
 function clampIntegerEnv(rawValue, fallback, min, max) {
   const parsed = Number(rawValue)
   if (!Number.isFinite(parsed)) return fallback
   return Math.min(max, Math.max(min, Math.floor(parsed)))
+}
+
+const DEFAULT_PUBLIC_META = {
+  title: 'Zenflow | Focus, Tasks, and Daily Rhythm',
+  description: 'Zenflow combines focus timers, planner tools, daily notes, calm breaks, and public focus articles in one clean flow.',
+}
+
+const PUBLIC_PAGE_META = {
+  '/': DEFAULT_PUBLIC_META,
+  '/blog': {
+    title: 'Blog — Zenflow',
+    description: 'Read Zenflow guides on phone habits, dopamine detox, deep work, and focus tracking before you create an account.',
+  },
+  '/beat-phone-addiction': {
+    title: 'How to Beat Phone Addiction Without Quitting Technology — Zenflow',
+    description: 'A realistic guide to reducing compulsive phone use, rebuilding attention, and making your device serve your goals instead of hijacking them.',
+  },
+  '/dopamine-detox-guide': {
+    title: 'A Realistic Dopamine Detox Guide That Actually Works — Zenflow',
+    description: 'A grounded dopamine detox guide focused on reducing overstimulation, restoring attention, and making normal work feel engaging again.',
+  },
+  '/deep-work-system': {
+    title: 'A Deep Work System for People Who Get Distracted Easily — Zenflow',
+    description: 'A practical deep work framework for protecting attention, structuring focus blocks, and producing high-value work consistently.',
+  },
+  '/focus-tracking': {
+    title: 'Focus Tracking: How to Measure Attention and Improve It — Zenflow',
+    description: 'A practical guide to focus tracking, including what metrics matter, how to log sessions, and how to use data to improve concentration.',
+  },
+  '/about': {
+    title: 'About Us — Zenflow',
+    description: 'Mission, vision, team introduction, and Zenflow community focus on better work habits.',
+  },
+  '/faq': {
+    title: 'FAQ — Zenflow',
+    description: 'Common questions for Zenflow users covering login, planner, focus timer, and app setup.',
+  },
+  '/contact': {
+    title: 'Contact — Zenflow',
+    description: 'Contact Zenflow support, share feedback, and get help with access or account issues.',
+  },
+  '/privacy': {
+    title: 'Privacy Policy — Zenflow',
+    description: 'How Zenflow collects, stores, and protects user data and what rights are available to users.',
+  },
+  '/terms': {
+    title: 'Terms of Service — Zenflow',
+    description: 'Acceptable use, account responsibilities, and service rules for using Zenflow.',
+  },
+  '/cookie': {
+    title: 'Cookie Policy — Zenflow',
+    description: 'What cookies and local storage are used on Zenflow and how to manage them.',
+  },
+}
+
+function normalizePublicSeoPath(rawPath) {
+  const pathname = String(rawPath || '').trim()
+  if (!pathname || pathname === '/') return '/'
+  const lowered = pathname.toLowerCase().replace(/\/+$/, '')
+  return lowered.startsWith('/') ? lowered : `/${lowered}`
+}
+
+function getPublicPageSeo(pathname) {
+  const normalizedPath = normalizePublicSeoPath(pathname)
+  const meta = PUBLIC_PAGE_META[normalizedPath]
+  if (!meta) return null
+  return {
+    path: normalizedPath,
+    title: meta.title,
+    description: meta.description,
+  }
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function replaceMetaTag(html, pattern, replacement) {
+  return pattern.test(html) ? html.replace(pattern, replacement) : html
+}
+
+function injectIndexMeta(html, { title, description, canonicalUrl, robots }) {
+  let nextHtml = html
+  nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(title)}</title>`)
+  nextHtml = replaceMetaTag(
+    nextHtml,
+    /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i,
+    `<meta name="description" content="${escapeHtml(description)}" />`
+  )
+  nextHtml = replaceMetaTag(
+    nextHtml,
+    /<meta\s+name="robots"\s+content="[^"]*"\s*\/?>/i,
+    `<meta name="robots" content="${escapeHtml(robots)}" />`
+  )
+  nextHtml = replaceMetaTag(
+    nextHtml,
+    /<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/i,
+    `<meta property="og:title" content="${escapeHtml(title)}" />`
+  )
+  nextHtml = replaceMetaTag(
+    nextHtml,
+    /<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/i,
+    `<meta property="og:description" content="${escapeHtml(description)}" />`
+  )
+  nextHtml = replaceMetaTag(
+    nextHtml,
+    /<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>/i,
+    `<meta property="og:url" content="${escapeHtml(canonicalUrl)}" />`
+  )
+  nextHtml = replaceMetaTag(
+    nextHtml,
+    /<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/?>/i,
+    `<meta name="twitter:title" content="${escapeHtml(title)}" />`
+  )
+  nextHtml = replaceMetaTag(
+    nextHtml,
+    /<meta\s+name="twitter:description"\s+content="[^"]*"\s*\/?>/i,
+    `<meta name="twitter:description" content="${escapeHtml(description)}" />`
+  )
+  nextHtml = replaceMetaTag(
+    nextHtml,
+    /<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i,
+    `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />`
+  )
+  nextHtml = nextHtml.replace(/"url":\s*"[^"]*"/i, `"url": ${JSON.stringify(canonicalUrl)}`)
+  return nextHtml
+}
+
+function getIndexHtml(buildDir) {
+  if (!cachedIndexHtml) {
+    cachedIndexHtml = fs.readFileSync(path.join(buildDir, 'index.html'), 'utf8')
+  }
+  return cachedIndexHtml
+}
+
+function getRequestProtocol(req) {
+  return String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim().toLowerCase()
+}
+
+function getRequestHostname(req) {
+  return String(req.headers['x-forwarded-host'] || req.headers.host || req.hostname || '')
+    .split(',')[0]
+    .trim()
+    .replace(/:\d+$/, '')
+    .toLowerCase()
+}
+
+function buildCanonicalRequestUrl(req, pathname) {
+  const url = new URL(req.originalUrl || pathname || '/', CANONICAL_ORIGIN)
+  url.pathname = pathname
+  return url.toString()
 }
 
 const userSchema = new mongoose.Schema({
@@ -814,6 +979,506 @@ function buildGameRecordsFromEntries(entries) {
     .slice(0, 5)
 
   return { sudoku, reaction }
+}
+
+function coachDateKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function buildRecentCoachDateKeys(days) {
+  const keys = []
+  const cursor = new Date()
+  cursor.setHours(0, 0, 0, 0)
+
+  for (let index = 0; index < days; index += 1) {
+    const next = new Date(cursor)
+    next.setDate(cursor.getDate() - index)
+    keys.push(coachDateKey(next))
+  }
+
+  return keys
+}
+
+function normalizeCoachLogType(type) {
+  const normalized = String(type || '').trim()
+  return normalized.startsWith('sudoku') ? 'sudoku' : normalized
+}
+
+function summarizeCoachLogs(logs, allowedDates = null) {
+  const allowed = allowedDates ? new Set(allowedDates) : null
+  const totals = {
+    pomodoro: 0,
+    meditation: 0,
+    sudoku: 0,
+    memory: 0,
+    reaction: 0,
+    steps: 0,
+    pomodoro_bonus: 0,
+  }
+  const activeDays = new Set()
+
+  logs.forEach((entry) => {
+    if (allowed && !allowed.has(entry.date)) return
+
+    const type = normalizeCoachLogType(entry.type)
+    const value = Number(entry.value || 0)
+    totals[type] = (totals[type] || 0) + value
+    if (value > 0) {
+      activeDays.add(entry.date)
+    }
+  })
+
+  return {
+    totals,
+    activeDays: activeDays.size,
+  }
+}
+
+function calculateCoachStreak(logs) {
+  const activeDays = new Set(
+    logs
+      .filter((entry) => Number(entry.value || 0) > 0)
+      .map((entry) => entry.date)
+  )
+
+  if (activeDays.size === 0) return 0
+
+  let streak = 0
+  const cursor = new Date()
+  cursor.setHours(0, 0, 0, 0)
+
+  for (;;) {
+    const key = coachDateKey(cursor)
+    if (!activeDays.has(key)) break
+    streak += 1
+    cursor.setDate(cursor.getDate() - 1)
+  }
+
+  return streak
+}
+
+function calculateCoachLevel(totalPoints) {
+  const pointsPerLevel = 180
+  return {
+    level: Math.max(1, Math.floor(totalPoints / pointsPerLevel) + 1),
+    nextLevelIn: pointsPerLevel - (totalPoints % pointsPerLevel),
+  }
+}
+
+function collectRecentCoachNotes(journals, limit = 3) {
+  if (!journals || typeof journals !== 'object') return []
+
+  return Object.entries(journals)
+    .flatMap(([dateKey, notes]) => {
+      if (Array.isArray(notes)) {
+        return notes
+          .map((note) => ({
+            dateKey,
+            createdAt: Number(note?.createdAt || 0),
+            text: String(note?.text || '').trim(),
+          }))
+          .filter((note) => note.text)
+      }
+
+      const legacyText = String(notes || '').trim()
+      return legacyText
+        ? [{ dateKey, createdAt: 0, text: legacyText }]
+        : []
+    })
+    .sort((left, right) => {
+      if (right.dateKey !== left.dateKey) return right.dateKey.localeCompare(left.dateKey)
+      return Number(right.createdAt || 0) - Number(left.createdAt || 0)
+    })
+    .slice(0, limit)
+    .map((note) => ({
+      dateKey: note.dateKey,
+      text: note.text.slice(0, 220),
+    }))
+}
+
+function collectCoachTodos(meta, dateKey) {
+  const todos = Array.isArray(meta?.todosByDate?.[dateKey]) ? meta.todosByDate[dateKey] : []
+  return todos.slice(0, 6).map((todo) => ({
+    text: String(todo?.text || '').trim().slice(0, 140),
+    done: Boolean(todo?.done),
+  })).filter((todo) => todo.text)
+}
+
+function buildCoachPerformanceSummary({ username, fullName, logs, meta }) {
+  const today = coachDateKey()
+  const last7Dates = buildRecentCoachDateKeys(7)
+  const last28Dates = buildRecentCoachDateKeys(28)
+  const todaySummary = summarizeCoachLogs(logs, [today])
+  const last7Summary = summarizeCoachLogs(logs, last7Dates)
+  const last28Summary = summarizeCoachLogs(logs, last28Dates)
+  const totalPoints = logs.reduce((sum, entry) => sum + calculateLogPoints(entry.type, entry.value), 0)
+  const level = calculateCoachLevel(totalPoints)
+
+  return {
+    username,
+    fullName: sanitizeFullName(fullName || username),
+    today,
+    totalPoints,
+    level,
+    currentStreak: calculateCoachStreak(logs),
+    todaySummary,
+    last7Summary,
+    last28Summary,
+    intention: String(meta?.intention || '').trim().slice(0, 220),
+    recentNotes: collectRecentCoachNotes(meta?.journals, 3),
+    todaysTodos: collectCoachTodos(meta, today),
+    plannerCustomCount: Array.isArray(meta?.planner?.customItems) ? meta.planner.customItems.length : 0,
+    bestTimesMs: {
+      easy: Number(meta?.sudoku?.bestTimesMs?.easy || 0) || null,
+      medium: Number(meta?.sudoku?.bestTimesMs?.medium || 0) || null,
+      hard: Number(meta?.sudoku?.bestTimesMs?.hard || 0) || null,
+      reaction: Number(meta?.brainArcade?.reactionBestMs || 0) || null,
+    },
+  }
+}
+
+function formatCoachDuration(ms) {
+  const numericMs = Number(ms || 0)
+  if (!numericMs) return 'not recorded'
+
+  const totalSeconds = Math.max(1, Math.round(numericMs / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (!minutes) return `${seconds}s`
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`
+}
+
+const COACH_RESOURCES = [
+  {
+    kind: 'dashboard',
+    id: 'dashboard',
+    label: 'Dashboard',
+    description: 'Review your current stats, streak, and note cards in one place.',
+    keywords: ['progress', 'performance', 'week', 'stats', 'overview'],
+  },
+  {
+    kind: 'tool',
+    id: 'pomodoro',
+    label: 'Focus Timer',
+    description: 'Run a focused work block and make your progress visible.',
+    keywords: ['focus', 'deep work', 'study', 'work', 'attention', 'productivity', 'distracted'],
+  },
+  {
+    kind: 'tool',
+    id: 'meditation',
+    label: 'Meditation',
+    description: 'Use a short breathing reset when your head feels noisy.',
+    keywords: ['stress', 'anxious', 'calm', 'breathe', 'overwhelmed', 'reset'],
+  },
+  {
+    kind: 'tool',
+    id: 'planner',
+    label: 'Planner',
+    description: 'Turn advice into a simple schedule with reminders and completion tracking.',
+    keywords: ['plan', 'today', 'schedule', 'task', 'todo', 'routine'],
+  },
+  {
+    kind: 'tool',
+    id: 'breakroom',
+    label: 'Break Room',
+    description: 'Take a deliberate reset instead of drifting into low-value scrolling.',
+    keywords: ['break', 'rest', 'tired', 'burnout'],
+  },
+  {
+    kind: 'tool',
+    id: 'sudoku',
+    label: 'Sudoku',
+    description: 'Use a short puzzle when you want a structured mental reset.',
+    keywords: ['sudoku', 'puzzle', 'logic'],
+  },
+  {
+    kind: 'tool',
+    id: 'arcade',
+    label: 'Games',
+    description: 'Use the reaction and memory drills for a quick cognitive reset.',
+    keywords: ['reaction', 'memory', 'brain', 'games', 'slow'],
+  },
+  {
+    kind: 'account',
+    id: 'profile',
+    label: 'Account',
+    description: 'Update your notes, profile details, and saved routines.',
+    keywords: ['note', 'journal', 'profile', 'account'],
+  },
+  {
+    kind: 'article',
+    id: 'beat-phone-addiction',
+    label: 'Beat Phone Addiction',
+    description: 'Read the phone habit article when distraction starts with compulsive checking.',
+    keywords: ['phone', 'scroll', 'social media', 'doomscroll', 'reels', 'instagram'],
+  },
+  {
+    kind: 'article',
+    id: 'dopamine-detox-guide',
+    label: 'Dopamine Detox Guide',
+    description: 'Read the overstimulation guide when everything feels too noisy to focus on.',
+    keywords: ['dopamine', 'detox', 'stimulation', 'overstimulated', 'craving'],
+  },
+  {
+    kind: 'article',
+    id: 'deep-work-system',
+    label: 'Deep Work System',
+    description: 'Read the deep work article for a better focus architecture.',
+    keywords: ['deep work', 'focus', 'study', 'work system', 'concentration'],
+  },
+  {
+    kind: 'article',
+    id: 'focus-tracking',
+    label: 'Focus Tracking',
+    description: 'Read the focus tracking article to make your progress easier to measure.',
+    keywords: ['tracking', 'measure', 'metrics', 'progress', 'consistency'],
+  },
+]
+
+function selectCoachResources(message, summary) {
+  const input = String(message || '').toLowerCase()
+  const scored = COACH_RESOURCES.map((resource) => {
+    let score = 0
+
+    resource.keywords.forEach((keyword) => {
+      if (input.includes(keyword)) {
+        score += keyword.includes(' ') ? 3 : 2
+      }
+    })
+
+    if (resource.id === 'planner' && (input.includes('plan') || input.includes('today') || input.includes('week'))) {
+      score += 4
+    }
+    if (resource.id === 'pomodoro' && summary.last7Summary.totals.pomodoro < 60) {
+      score += 2
+    }
+    if (resource.id === 'meditation' && summary.last7Summary.totals.meditation < 10) {
+      score += 1
+    }
+    if (resource.id === 'focus-tracking' && summary.last7Summary.activeDays <= 3) {
+      score += 2
+    }
+    if (resource.id === 'deep-work-system' && summary.last7Summary.totals.pomodoro < 90) {
+      score += 1
+    }
+    if (resource.id === 'dashboard' && (input.includes('how am i doing') || input.includes('performance'))) {
+      score += 4
+    }
+    if (resource.id === 'beat-phone-addiction' && (input.includes('phone') || input.includes('scroll'))) {
+      score += 4
+    }
+    if (resource.id === 'dopamine-detox-guide' && (input.includes('dopamine') || input.includes('overstim'))) {
+      score += 4
+    }
+
+    return { resource, score }
+  })
+
+  const picks = scored
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 3)
+    .map((entry) => ({
+      kind: entry.resource.kind,
+      id: entry.resource.id,
+      label: entry.resource.label,
+      description: entry.resource.description,
+    }))
+
+  if (picks.length > 0) return picks
+
+  return [
+    {
+      kind: 'dashboard',
+      id: 'dashboard',
+      label: 'Dashboard',
+      description: 'Start with your recent stats and streak before making changes.',
+    },
+    {
+      kind: 'tool',
+      id: 'planner',
+      label: 'Planner',
+      description: 'Turn broad advice into a concrete plan for today.',
+    },
+    {
+      kind: 'article',
+      id: 'focus-tracking',
+      label: 'Focus Tracking',
+      description: 'Use the article if you want a clearer way to measure progress.',
+    },
+  ]
+}
+
+function buildCoachSummaryText(summary) {
+  const todoLines = summary.todaysTodos.length
+    ? summary.todaysTodos.map((todo) => `- [${todo.done ? 'x' : ' '}] ${todo.text}`).join('\n')
+    : '- No tasks saved for today.'
+  const noteLines = summary.recentNotes.length
+    ? summary.recentNotes.map((note) => `- ${note.dateKey}: ${note.text}`).join('\n')
+    : '- No recent notes saved.'
+
+  return [
+    `User: @${summary.username}${summary.fullName ? ` (${summary.fullName})` : ''}`,
+    `Today: ${summary.today}`,
+    `Total points: ${summary.totalPoints}`,
+    `Level: ${summary.level.level}`,
+    `Points to next level: ${summary.level.nextLevelIn}`,
+    `Current streak: ${summary.currentStreak} day(s)`,
+    `Today totals: focus ${summary.todaySummary.totals.pomodoro} min, meditation ${summary.todaySummary.totals.meditation} min, sudoku ${summary.todaySummary.totals.sudoku}, memory ${summary.todaySummary.totals.memory}, reaction ${summary.todaySummary.totals.reaction}`,
+    `Last 7 days: active days ${summary.last7Summary.activeDays}, focus ${summary.last7Summary.totals.pomodoro} min, meditation ${summary.last7Summary.totals.meditation} min, sudoku ${summary.last7Summary.totals.sudoku}, memory ${summary.last7Summary.totals.memory}, reaction ${summary.last7Summary.totals.reaction}`,
+    `Last 28 days: active days ${summary.last28Summary.activeDays}, focus ${summary.last28Summary.totals.pomodoro} min, meditation ${summary.last28Summary.totals.meditation} min, sudoku ${summary.last28Summary.totals.sudoku}, memory ${summary.last28Summary.totals.memory}, reaction ${summary.last28Summary.totals.reaction}`,
+    `Best Sudoku times: easy ${formatCoachDuration(summary.bestTimesMs.easy)}, medium ${formatCoachDuration(summary.bestTimesMs.medium)}, hard ${formatCoachDuration(summary.bestTimesMs.hard)}`,
+    `Best reaction time: ${formatCoachDuration(summary.bestTimesMs.reaction)}`,
+    `Saved intention: ${summary.intention || 'None'}`,
+    `Planner custom items saved: ${summary.plannerCustomCount}`,
+    'Today tasks:',
+    todoLines,
+    'Recent notes:',
+    noteLines,
+  ].join('\n')
+}
+
+function sanitizeCoachHistory(history) {
+  if (!Array.isArray(history)) return []
+
+  return history
+    .slice(-COACH_HISTORY_LIMIT)
+    .map((entry) => ({
+      role: entry?.role === 'assistant' ? 'assistant' : 'user',
+      content: String(entry?.content || '').trim().slice(0, COACH_MESSAGE_CHAR_LIMIT),
+    }))
+    .filter((entry) => entry.content)
+}
+
+function extractGeminiResponseText(payload) {
+  const chunks = []
+  ;(payload?.candidates || []).forEach((candidate) => {
+    ;(candidate?.content?.parts || []).forEach((part) => {
+      if (typeof part?.text === 'string' && part.text.trim()) {
+        chunks.push(part.text.trim())
+      }
+    })
+  })
+
+  return chunks.join('\n\n').trim()
+}
+
+function extractGeminiBlockReason(payload) {
+  const promptBlock = String(payload?.promptFeedback?.blockReason || '').trim()
+  if (promptBlock) return promptBlock
+
+  const candidateBlock = String(payload?.candidates?.[0]?.finishReason || '').trim()
+  return candidateBlock || ''
+}
+
+async function loadCoachUserData(username) {
+  if (useFileStorage) {
+    const data = readData()
+    const rawLogs = data.logs?.[username] || {}
+    const logs = []
+
+    Object.entries(rawLogs).forEach(([date, types]) => {
+      if (typeof types === 'number') {
+        logs.push({ date, type: 'legacy', value: types })
+        return
+      }
+
+      Object.entries(types || {}).forEach(([type, value]) => {
+        logs.push({ date, type, value: Number(value) || 0 })
+      })
+    })
+
+    return {
+      user: data.users?.[username] || null,
+      logs,
+      meta: data.meta?.[username] || {},
+    }
+  }
+
+  const [user, logs, meta] = await Promise.all([
+    User.findOne({ username }).lean().exec(),
+    Log.find({ user: username }).lean().exec(),
+    Meta.findOne({ user: username }).lean().exec(),
+  ])
+
+  return {
+    user,
+    logs: logs.map((entry) => ({
+      date: entry.date,
+      type: entry.type,
+      value: Number(entry.value || 0),
+    })),
+    meta: meta?.meta || {},
+  }
+}
+
+async function generateCoachReply({ message, history, summary, resources }) {
+  const conversationText = history.length
+    ? history.map((entry) => `${entry.role === 'assistant' ? 'Coach' : 'User'}: ${entry.content}`).join('\n')
+    : 'No previous conversation.'
+  const resourceText = resources.map((resource) => `- ${resource.label}: ${resource.description}`).join('\n')
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_COACH_MODEL)}:generateContent`,
+    {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': GEMINI_API_KEY,
+    },
+    body: JSON.stringify({
+      system_instruction: {
+        parts: [
+          {
+            text: [
+              'You are Zenflow Coach, a warm and practical in-app coach for a focus and wellness product.',
+              'Use the provided performance summary to answer personally and accurately.',
+              'Only refer to performance facts that appear in the provided summary. If something is missing, say that briefly.',
+              'Be supportive, clear, and concrete. Avoid therapy language, diagnosis, or hype.',
+              'When useful, suggest up to three next steps. If the user asks for a plan, give a short numbered plan.',
+              'When pointing to Zenflow resources, use the exact resource names from the provided resource catalog when relevant.',
+              'Keep the answer under 220 words unless the user explicitly asks for more detail.',
+              'If the user mentions self-harm, suicidal thoughts, or immediate danger, encourage urgent local professional or emergency help.',
+            ].join(' '),
+          },
+        ],
+      },
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: [
+                `Performance summary:\n${buildCoachSummaryText(summary)}`,
+                `Resource catalog:\n${resourceText}`,
+                `Recent conversation:\n${conversationText}`,
+                `Latest user message:\n${message}`,
+              ].join('\n\n'),
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 500,
+      },
+    }),
+    signal: AbortSignal.timeout(COACH_RESPONSE_TIMEOUT_MS),
+    }
+  )
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`coach request failed (${response.status}): ${errorText}`)
+  }
+
+  const payload = await response.json()
+  const reply = extractGeminiResponseText(payload)
+  if (!reply) {
+    const blockReason = extractGeminiBlockReason(payload)
+    throw new Error(blockReason ? `coach reply blocked: ${blockReason}` : 'coach returned an empty reply')
+  }
+
+  return reply
 }
 
 function getAttemptKey(req, identifier) {
@@ -1759,6 +2424,44 @@ app.get('/api/meta', authMiddleware, async (req, res) => {
   }
 })
 
+app.post('/api/coach/chat', authMiddleware, async (req, res) => {
+  const message = String(req.body?.message || '').trim().slice(0, COACH_MESSAGE_CHAR_LIMIT)
+  if (!message) {
+    return res.status(400).json({ error: 'message is required' })
+  }
+
+  if (!GEMINI_API_KEY) {
+    return res.status(503).json({ error: 'Coach is not configured yet. Add GEMINI_API_KEY on the server.' })
+  }
+
+  try {
+    const history = sanitizeCoachHistory(req.body?.history)
+    const coachData = await loadCoachUserData(req.user)
+    const summary = buildCoachPerformanceSummary({
+      username: req.user,
+      fullName: coachData.user?.fullName || req.user,
+      logs: coachData.logs,
+      meta: coachData.meta,
+    })
+    const resources = selectCoachResources(message, summary)
+    const reply = await generateCoachReply({
+      message,
+      history,
+      summary,
+      resources,
+    })
+
+    return res.json({
+      ok: true,
+      reply,
+      resources,
+    })
+  } catch (error) {
+    console.error('Coach chat failed:', error?.message || error)
+    return res.status(500).json({ error: 'Coach could not answer right now. Please try again.' })
+  }
+})
+
 app.get('/api/leaderboard', authMiddleware, async (req, res) => {
   try {
     if (useFileStorage) {
@@ -1923,9 +2626,45 @@ app.post('/api/meta', authMiddleware, async (req, res) => {
 
 if (process.env.NODE_ENV === 'production') {
   const buildDir = path.join(__dirname, '..', 'client', 'dist')
+  app.set('trust proxy', true)
+
+  app.use((req, res, next) => {
+    if (!['GET', 'HEAD'].includes(req.method)) return next()
+    if (req.path === '/health' || req.path.startsWith('/api/')) return next()
+
+    const requestProtocol = getRequestProtocol(req)
+    const requestHostname = getRequestHostname(req)
+    const publicPage = getPublicPageSeo(req.path)
+    const normalizedPath = publicPage ? publicPage.path : req.path
+    const needsProtocolRedirect = requestProtocol !== 'https'
+    const needsHostRedirect = requestHostname !== CANONICAL_HOSTNAME
+    const needsPathRedirect = normalizedPath !== req.path
+
+    if (!needsProtocolRedirect && !needsHostRedirect && !needsPathRedirect) return next()
+
+    const redirectUrl = buildCanonicalRequestUrl(req, normalizedPath)
+    return res.redirect(308, redirectUrl)
+  })
+
   app.use(express.static(buildDir))
   app.get('*', (req, res) => {
-    res.sendFile(path.join(buildDir, 'index.html'))
+    const publicPage = getPublicPageSeo(req.path)
+    const meta = publicPage || {
+      path: normalizePublicSeoPath(req.path),
+      title: DEFAULT_PUBLIC_META.title,
+      description: DEFAULT_PUBLIC_META.description,
+    }
+    const canonicalUrl = new URL(publicPage ? publicPage.path : '/', CANONICAL_ORIGIN).toString()
+    const robots = publicPage ? 'index,follow' : 'noindex,nofollow'
+    const html = injectIndexMeta(getIndexHtml(buildDir), {
+      title: meta.title,
+      description: meta.description,
+      canonicalUrl,
+      robots,
+    })
+
+    res.set('X-Robots-Tag', robots)
+    res.send(html)
   })
 }
 

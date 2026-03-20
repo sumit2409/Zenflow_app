@@ -8,6 +8,7 @@ import ProfileCenter from './components/ProfileCenter'
 import BrainArcade from './components/BrainArcade'
 import MarketingLanding from './components/MarketingLanding'
 import BreakRoom from './components/BreakRoom'
+import CoachPanel, { type CoachResource } from './components/CoachPanel'
 import { BlogIndexPage, BlogArticlePage, BlogPreviewSection, blogPageMeta, isBlogArticleId, type BlogArticleId } from './components/BlogPages'
 import type { AuthAccount, StoredSession } from './types/auth'
 import type { GoalIntent } from './types/experience'
@@ -661,6 +662,29 @@ export default function App() {
     setSelected('pomodoro')
   }
 
+  function handleOpenCoachResource(resource: CoachResource) {
+    if (resource.kind === 'article') {
+      openBlogArticle(resource.id)
+      return
+    }
+
+    if (activePublicPage) {
+      clearPublicRoute()
+    }
+
+    if (resource.kind === 'dashboard') {
+      setSelected(null)
+      return
+    }
+
+    if (resource.kind === 'account') {
+      setSelected('profile')
+      return
+    }
+
+    setSelected(resource.id)
+  }
+
   function renderPublicPage(page: PublicPageRoute) {
     if (page.kind === 'blogIndex') {
       return <BlogIndexPage onOpenArticle={openBlogArticle} onOpenAuth={openAuth} />
@@ -1012,6 +1036,13 @@ export default function App() {
             }}
           />
         </div>
+      )}
+      {account && token && !showLogin && (
+        <CoachPanel
+          displayName={account.fullName || account.username}
+          token={token}
+          onOpenResource={handleOpenCoachResource}
+        />
       )}
       <nav className="bottom-nav" aria-label="Primary navigation">
         <button className={`bottom-nav-item ${!account && selected === null ? 'active' : ''}`} onClick={() => handleBottomNav('home')}>

@@ -2377,6 +2377,188 @@ input[type='date'],
   white-space: nowrap;
 }
 
+.coach-shell {
+  position: fixed;
+  right: 18px;
+  bottom: 24px;
+  z-index: 70;
+  display: grid;
+  gap: 12px;
+  justify-items: end;
+}
+
+.coach-panel {
+  width: min(380px, calc(100vw - 28px));
+  max-height: min(72vh, 640px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  gap: 14px;
+  padding: 20px;
+  background: var(--card-strong);
+  box-shadow: 0 28px 90px rgba(47, 36, 30, 0.18);
+}
+
+.coach-panel:hover {
+  transform: none;
+  box-shadow: 0 28px 90px rgba(47, 36, 30, 0.18);
+}
+
+.coach-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.coach-head h3 {
+  margin: 6px 0 4px;
+}
+
+.coach-subline {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.coach-close-btn {
+  min-height: 42px;
+}
+
+.coach-quick-prompts {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.coach-chip {
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.coach-feed {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.coach-empty-state,
+.coach-message {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.coach-empty-state strong,
+.coach-message-role {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.coach-empty-state p,
+.coach-message p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.coach-message-user {
+  background: linear-gradient(135deg, rgba(188, 108, 71, 0.12), rgba(215, 163, 109, 0.12));
+}
+
+.coach-message-assistant {
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.coach-message-loading {
+  border-style: dashed;
+}
+
+.coach-resource-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.coach-resource-btn {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-height: unset;
+  padding: 12px 14px;
+  border-radius: 16px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.coach-resource-btn strong {
+  font-size: 14px;
+}
+
+.coach-resource-btn span {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.coach-feedback {
+  margin: 0;
+}
+
+.coach-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.coach-input-wrap {
+  display: block;
+}
+
+.coach-input-wrap textarea {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink);
+}
+
+.coach-send-btn {
+  min-width: 84px;
+}
+
+.coach-launcher {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  min-height: unset;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(125, 149, 119, 0.98), rgba(188, 108, 71, 0.98));
+  color: #fffaf5;
+  box-shadow: 0 18px 40px rgba(47, 36, 30, 0.18);
+}
+
+.coach-launcher-badge {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -3741,6 +3923,26 @@ input[type='date'],
 }
 
 @media (max-width: 767px) {
+  .coach-shell {
+    left: 10px;
+    right: 10px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+  }
+
+  .coach-panel {
+    width: min(100%, 100%);
+    max-height: min(74vh, 680px);
+    padding: 18px;
+  }
+
+  .coach-head {
+    flex-direction: column;
+  }
+
+  .coach-form {
+    grid-template-columns: 1fr;
+  }
+
   .bottom-nav {
     position: fixed;
     left: 0;
