@@ -1338,6 +1338,63 @@ function buildCoachSummaryText(summary) {
   ].join('\n')
 }
 
+function buildFallbackCoachReply({ message, summary, resources }) {
+  const input = String(message || '').toLowerCase()
+  const focusMinutes = summary.last7Summary.totals.pomodoro
+  const meditationMinutes = summary.last7Summary.totals.meditation
+  const activeDays = summary.last7Summary.activeDays
+  const sudokuCount = summary.last7Summary.totals.sudoku
+  const openTasks = summary.todaysTodos.filter((todo) => !todo.done).length
+  const topResourceLabels = resources.slice(0, 2).map((resource) => resource.label)
+
+  const baseline = activeDays === 0
+    ? 'You have not logged any Zenflow activity in the last 7 days yet, so the main job is simply to restart momentum.'
+    : `In the last 7 days you logged ${focusMinutes} focus minute(s), ${meditationMinutes} meditation minute(s), and ${sudokuCount} Sudoku win(s) across ${activeDays} active day(s).`
+
+  const streakLine = summary.currentStreak > 0
+    ? `You currently have a ${summary.currentStreak}-day streak.`
+    : 'You do not have an active streak right now.'
+
+  if (/\b(plan|today|schedule|next step|what should i do)\b/.test(input)) {
+    const planLines = [
+      baseline,
+      streakLine,
+      '1. Start with one clear focus block in Focus Timer, even if it is short.',
+      openTasks > 0
+        ? `2. Pick one of your ${openTasks} open task(s) for today and move it into Planner as the next priority.`
+        : '2. Add one realistic priority into Planner before starting anything else.',
+      meditationMinutes < 5
+        ? '3. Add a short Meditation reset later in the day so the pace stays sustainable.'
+        : '3. Protect your current rhythm with one more focused block instead of adding extra context-switching.',
+    ]
+
+    if (topResourceLabels.length > 0) {
+      planLines.push(`Best next place to go: ${topResourceLabels.join(' and ')}.`)
+    }
+
+    return planLines.join('\n\n')
+  }
+
+  const priorityLine = focusMinutes < 60
+    ? 'Your clearest opportunity is consistency in focused work.'
+    : meditationMinutes < 10
+      ? 'Your clearest opportunity is adding calmer reset time around your work.'
+      : 'Your recent activity has some momentum, so the next gain is tightening the plan rather than adding more tools.'
+
+  const replyLines = [baseline, streakLine, priorityLine]
+
+  if (summary.intention) {
+    replyLines.push(`Your saved intention right now is "${summary.intention}".`)
+  }
+
+  if (topResourceLabels.length > 0) {
+    replyLines.push(`Best next place to open: ${topResourceLabels.join(' and ')}.`)
+  }
+
+  replyLines.push('Gemini is temporarily unavailable, so this reply is based directly on your Zenflow data and built-in coaching rules.')
+  return replyLines.join('\n\n')
+}
+
 function sanitizeCoachHistory(history) {
   if (!Array.isArray(history)) return []
 
@@ -2439,10 +2496,6 @@ app.post('/api/coach/chat', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'message is required' })
   }
 
-  if (!GEMINI_API_KEY) {
-    return res.status(503).json({ error: 'Coach is not configured yet. Add GEMINI_API_KEY on the server.' })
-  }
-
   try {
     const history = sanitizeCoachHistory(req.body?.history)
     const coachData = await loadCoachUserData(req.user)
@@ -2453,6 +2506,16 @@ app.post('/api/coach/chat', authMiddleware, async (req, res) => {
       meta: coachData.meta,
     })
     const resources = selectCoachResources(message, summary)
+
+    if (!GEMINI_API_KEY) {
+      return res.json({
+        ok: true,
+        reply: buildFallbackCoachReply({ message, summary, resources }),
+        resources,
+        fallback: true,
+      })
+    }
+
     const reply = await generateCoachReply({
       message,
       history,
@@ -2469,17 +2532,26 @@ app.post('/api/coach/chat', authMiddleware, async (req, res) => {
     const messageText = String(error?.message || 'Coach could not answer right now. Please try again.')
     console.error('Coach chat failed:', messageText)
 
-    const userMessage = messageText.includes('429')
-      ? 'Coach hit the current Gemini free-tier quota. Please try again later.'
-      : messageText.includes('403')
-        ? 'Coach could not access Gemini. Please recheck the API key and Gemini project access.'
-        : messageText.includes('400')
-          ? 'Coach request was rejected by Gemini. Please verify the selected Gemini model name.'
-          : messageText.includes('blocked:')
-            ? `Coach reply was blocked by Gemini safety filters: ${messageText.split('blocked:')[1].trim()}`
-            : 'Coach could not answer right now. Please try again.'
+    try {
+      const coachData = await loadCoachUserData(req.user)
+      const summary = buildCoachPerformanceSummary({
+        username: req.user,
+        fullName: coachData.user?.fullName || req.user,
+        logs: coachData.logs,
+        meta: coachData.meta,
+      })
+      const resources = selectCoachResources(message, summary)
 
-    return res.status(502).json({ error: userMessage })
+      return res.json({
+        ok: true,
+        reply: buildFallbackCoachReply({ message, summary, resources }),
+        resources,
+        fallback: true,
+      })
+    } catch (fallbackError) {
+      console.error('Coach fallback failed:', fallbackError?.message || fallbackError)
+      return res.status(502).json({ error: 'Coach could not answer right now. Please try again.' })
+    }
   }
 })
 

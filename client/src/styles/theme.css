@@ -2499,17 +2499,17 @@ input[type='date'],
 }
 
 .coach-quick-prompts {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
 }
 
 .coach-chip {
-  min-height: 38px;
+  min-height: 52px;
   padding: 8px 12px;
-  border-radius: 999px;
-  white-space: nowrap;
+  border-radius: 18px;
+  white-space: normal;
+  text-align: left;
   background: rgba(255, 255, 255, 0.76);
 }
 
@@ -4022,6 +4022,10 @@ input[type='date'],
 
   .coach-head {
     flex-direction: column;
+  }
+
+  .coach-quick-prompts {
+    grid-template-columns: 1fr;
   }
 
   .coach-form {
