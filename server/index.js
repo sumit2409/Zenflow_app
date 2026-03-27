@@ -52,6 +52,7 @@ const EMAIL_QUEUE_MAX_ATTEMPTS = clampIntegerEnv(process.env.EMAIL_QUEUE_MAX_ATT
 const CONTACT_MESSAGE_CHAR_LIMIT = 5000
 const ADMIN_LIST_PAGE_SIZE = 20
 const ADMIN_LIST_PAGE_SIZE_MAX = 100
+const ADMIN_DIRECT_SEND_LIMIT = 20
 
 const DATA_FILE = path.join(__dirname, 'data.json')
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
@@ -568,7 +569,7 @@ function buildEmailVerificationEmail({ fullName, code, verifyUrl }) {
   }
 }
 
-async function sendTransactionalEmail({ to, subject, text, html, preferredProvider = 'auto' }) {
+async function sendTransactionalEmail({ to, subject, text, html, preferredProvider = 'auto', replyTo = '' }) {
   const recipients = Array.isArray(to) ? to : [to]
   const normalizedRecipients = Array.from(
     new Set(
@@ -579,6 +580,7 @@ async function sendTransactionalEmail({ to, subject, text, html, preferredProvid
     )
   )
   if (!normalizedRecipients.length) return { delivered: false }
+  const normalizedReplyTo = normalizeEmail(replyTo)
 
   async function sendViaResend() {
     if (!RESEND_API_KEY || !RESEND_FROM) return { attempted: false, delivered: false }
@@ -595,6 +597,7 @@ async function sendTransactionalEmail({ to, subject, text, html, preferredProvid
           from: RESEND_FROM,
           to: normalizedRecipients,
           bcc: SMTP_RESET_BCC ? [SMTP_RESET_BCC] : undefined,
+          reply_to: normalizedReplyTo || undefined,
           subject,
           text,
           html,
@@ -623,6 +626,7 @@ async function sendTransactionalEmail({ to, subject, text, html, preferredProvid
         from: SMTP_FROM,
         to: normalizedRecipients.join(', '),
         bcc: SMTP_RESET_BCC || undefined,
+        replyTo: normalizedReplyTo || undefined,
         subject,
         text,
         html,
@@ -2301,6 +2305,19 @@ async function updateContactMessageRecord(id, patch) {
   return updated || null
 }
 
+async function getContactMessageRecord(id) {
+  const cleanId = sanitizeSingleLine(id, 80)
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    return admin.contactMessages.find((entry) => entry.id === cleanId) || null
+  }
+
+  const message = await ContactMessage.findOne({ _id: cleanId }).lean().exec()
+  return message || null
+}
+
 async function listEmailTemplates() {
   if (useFileStorage) {
     const data = readData()
@@ -3763,6 +3780,60 @@ app.post('/api/admin/messages/:id/status', authMiddleware, adminMiddleware, asyn
   }
 })
 
+app.post('/api/admin/messages/:id/reply', authMiddleware, adminMiddleware, async (req, res) => {
+  const subject = sanitizeSingleLine(req.body?.subject, 220)
+  const body = sanitizeMultiline(req.body?.body, 20000)
+  const preferredProviderRaw = sanitizeSingleLine(req.body?.preferredProvider, 20).toLowerCase()
+  const preferredProvider = preferredProviderRaw === 'smtp' ? 'smtp' : preferredProviderRaw === 'resend' ? 'resend' : 'auto'
+
+  if (!subject || !body) {
+    return res.status(400).json({ error: 'subject and body are required' })
+  }
+
+  try {
+    const message = await getContactMessageRecord(req.params.id)
+    if (!message) return res.status(404).json({ error: 'message not found' })
+
+    const recipientEmail = normalizeEmail(message.email)
+    if (!recipientEmail) return res.status(400).json({ error: 'message has no valid reply email' })
+
+    const delivery = await sendTransactionalEmail({
+      to: recipientEmail,
+      subject,
+      text: body,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.7;color:#2f241e">
+          ${formatPlainTextAsHtml(body)}
+        </div>
+      `,
+      preferredProvider,
+      replyTo: req.adminUser.email || ADMIN_EMAIL,
+    })
+
+    if (!delivery.delivered) {
+      return res.status(502).json({ error: 'email could not be delivered right now' })
+    }
+
+    const updated = await updateContactMessageRecord(req.params.id, {
+      status: 'replied',
+      repliedAt: Date.now(),
+    })
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.message.reply',
+      targetType: 'contact-message',
+      targetId: req.params.id,
+      summary: `Sent a reply to ${recipientEmail}`,
+    })
+
+    return res.json({ ok: true, item: updated, provider: delivery.provider || preferredProvider })
+  } catch (error) {
+    console.error('Admin message reply failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
 app.get('/api/admin/templates', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     return res.json({ items: await listEmailTemplates() })
@@ -3961,6 +4032,75 @@ app.post('/api/admin/campaigns/:id/test', authMiddleware, adminMiddleware, async
     return res.json({ ok: true, run })
   } catch (error) {
     console.error('Admin campaign test failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/campaigns/:id/send-now', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const campaign = await getEmailCampaignRecord(req.params.id)
+    if (!campaign) return res.status(404).json({ error: 'campaign not found' })
+
+    const recipients = (await resolveCampaignRecipients(campaign)).filter((entry) => normalizeEmail(entry.email))
+    if (!recipients.length) {
+      return res.status(400).json({ error: 'campaign has no eligible recipients' })
+    }
+    if (recipients.length > ADMIN_DIRECT_SEND_LIMIT) {
+      return res.status(400).json({ error: `send now supports up to ${ADMIN_DIRECT_SEND_LIMIT} recipients; use queue send for larger campaigns` })
+    }
+
+    const failures = []
+    let sent = 0
+
+    for (const recipient of recipients) {
+      const rendered = buildRenderedEmailContent({
+        subject: campaign.subject,
+        body: campaign.body,
+        user: recipient,
+      })
+
+      const delivery = await sendTransactionalEmail({
+        to: recipient.email,
+        subject: rendered.subject,
+        text: rendered.text,
+        html: rendered.html,
+        preferredProvider: campaign.preferredProvider || 'auto',
+        replyTo: req.adminUser.email || ADMIN_EMAIL,
+      })
+
+      if (delivery.delivered) {
+        sent += 1
+      } else {
+        failures.push({
+          email: recipient.email,
+          username: recipient.username,
+          provider: delivery.provider || campaign.preferredProvider || 'auto',
+        })
+      }
+    }
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.campaign.send_now',
+      targetType: 'campaign',
+      targetId: req.params.id,
+      summary: `Sent campaign "${campaign.name}" directly to ${sent}/${recipients.length} recipients`,
+      metadata: {
+        recipientCount: recipients.length,
+        sent,
+        failed: failures.length,
+      },
+    })
+
+    return res.json({
+      ok: true,
+      sent,
+      failed: failures.length,
+      recipientCount: recipients.length,
+      failures: failures.slice(0, 20),
+    })
+  } catch (error) {
+    console.error('Admin campaign send-now failed:', error)
     return res.status(500).json({ error: 'server error' })
   }
 })

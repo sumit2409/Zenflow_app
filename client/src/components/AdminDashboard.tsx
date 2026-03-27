@@ -208,6 +208,15 @@ type TemplateEditorState = {
   body: string
 }
 
+type ReplyEditorState = {
+  messageId: string
+  fullName: string
+  email: string
+  subject: string
+  body: string
+  preferredProvider: string
+}
+
 const TABS: Array<{ id: AdminTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'users', label: 'Users' },
@@ -272,6 +281,15 @@ const EMPTY_TEMPLATE: TemplateEditorState = {
   kind: 'general',
   subject: '',
   body: '',
+}
+
+const EMPTY_REPLY: ReplyEditorState = {
+  messageId: '',
+  fullName: '',
+  email: '',
+  subject: '',
+  body: '',
+  preferredProvider: 'auto',
 }
 
 function formatDateTime(value?: number | null) {
@@ -402,6 +420,9 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
   const [previewHtml, setPreviewHtml] = useState('')
   const [previewSubject, setPreviewSubject] = useState('')
   const [previewText, setPreviewText] = useState('')
+  const [replyEditor, setReplyEditor] = useState<ReplyEditorState>({ ...EMPTY_REPLY })
+  const [replyBusy, setReplyBusy] = useState(false)
+  const [sendNowBusy, setSendNowBusy] = useState(false)
 
   async function adminFetch<T>(path: string, init?: RequestInit) {
     const response = await fetch(apiUrl(path), {
@@ -532,6 +553,25 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
     setSelectedUsernames([])
   }
 
+  function openCampaignComposerFromSelection() {
+    if (selectedUsernames.length === 0) {
+      onNotify?.('Select at least one user first.')
+      return
+    }
+
+    setCampaignEditor((current) => ({
+      ...current,
+      id: '',
+      name: current.name || 'Admin email',
+      kind: 'one_off',
+      targetMode: selectedUsernames.length === 1 ? 'one' : 'selected',
+      selectedRecipients: joinRecipients(selectedUsernames),
+      preferredProvider: current.preferredProvider || 'auto',
+      status: 'draft',
+    }))
+    setActiveTab('campaigns')
+  }
+
   async function openUserDetail(username: string) {
     setLoadingUserDetail(true)
     try {
@@ -542,6 +582,44 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
       onNotify?.(String((error as Error)?.message || 'Could not load user details'))
     } finally {
       setLoadingUserDetail(false)
+    }
+  }
+
+  function openReplyComposer(message: ContactMessage) {
+    const name = message.fullName || 'there'
+    setReplyEditor({
+      messageId: normalizeId(message),
+      fullName: name,
+      email: message.email,
+      subject: `Re: your Zenflow message`,
+      body: `Hi ${name},\n\nThanks for reaching out to Zenflow.\n\n`,
+      preferredProvider: 'auto',
+    })
+  }
+
+  async function sendReply() {
+    if (!replyEditor.messageId) {
+      onNotify?.('Choose a message to reply to first.')
+      return
+    }
+
+    setReplyBusy(true)
+    try {
+      await adminFetch(`/api/admin/messages/${encodeURIComponent(replyEditor.messageId)}/reply`, {
+        method: 'POST',
+        body: JSON.stringify({
+          subject: replyEditor.subject,
+          body: replyEditor.body,
+          preferredProvider: replyEditor.preferredProvider,
+        }),
+      })
+      await Promise.all([loadMessages(), loadOverview()])
+      setReplyEditor({ ...EMPTY_REPLY })
+      onNotify?.('Reply sent.')
+    } catch (error) {
+      onNotify?.(String((error as Error)?.message || 'Reply could not be sent'))
+    } finally {
+      setReplyBusy(false)
     }
   }
 
@@ -687,6 +765,27 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
       onNotify?.(action === 'test' ? 'Test email queued to the admin inbox.' : 'Campaign queued.')
     } catch (error) {
       onNotify?.(String((error as Error)?.message || 'Campaign action failed'))
+    }
+  }
+
+  async function sendCampaignNow() {
+    const recordId = campaignEditor.id
+    if (!recordId) {
+      onNotify?.('Save the campaign first.')
+      return
+    }
+
+    setSendNowBusy(true)
+    try {
+      const payload = await adminFetch<{ sent: number; failed: number; recipientCount: number }>(`/api/admin/campaigns/${encodeURIComponent(recordId)}/send-now`, {
+        method: 'POST',
+      })
+      await Promise.all([loadOverview(), loadCampaigns()])
+      onNotify?.(`Sent ${payload.sent} of ${payload.recipientCount} emails directly.`)
+    } catch (error) {
+      onNotify?.(String((error as Error)?.message || 'Direct send failed'))
+    } finally {
+      setSendNowBusy(false)
     }
   }
 
@@ -837,6 +936,9 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                 </button>
                 <button type="button" className="ghost-btn" onClick={clearSelectedUsers}>
                   Clear selection
+                </button>
+                <button type="button" className="ghost-btn" onClick={openCampaignComposerFromSelection}>
+                  Email selected
                 </button>
                 <button type="button" className="ghost-btn" onClick={exportUsersCsv}>
                   Export CSV
@@ -1048,62 +1150,123 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                 Search
               </button>
             </div>
-            <div className="admin-list">
-              {messages.items.length === 0 ? (
-                <div className="admin-empty-state">No stored contact messages yet.</div>
-              ) : (
-                messages.items.map((message) => (
-                  <article key={normalizeId(message)} className="admin-message-card">
-                    <div className="admin-message-head">
-                      <div>
-                        <strong>{message.fullName || message.email}</strong>
-                        <div className="muted">{message.email}</div>
+            <div className="admin-message-layout">
+              <div className="admin-list">
+                {messages.items.length === 0 ? (
+                  <div className="admin-empty-state">No stored contact messages yet.</div>
+                ) : (
+                  messages.items.map((message) => (
+                    <article key={normalizeId(message)} className="admin-message-card">
+                      <div className="admin-message-head">
+                        <div>
+                          <strong>{message.fullName || message.email}</strong>
+                          <div className="muted">{message.email}</div>
+                        </div>
+                        <span className={`admin-status-pill ${statusTone(message.status)}`}>{message.status}</span>
                       </div>
-                      <span className={`admin-status-pill ${statusTone(message.status)}`}>{message.status}</span>
+                      <p>{message.message}</p>
+                      <div className="admin-inline-actions">
+                        <small className="muted">{formatDateTime(message.createdAt)}</small>
+                        <button type="button" className="ghost-btn" onClick={() => openReplyComposer(message)}>
+                          Reply
+                        </button>
+                        <button type="button" className="ghost-btn" onClick={() => void updateMessageStatus(message, 'new')}>
+                          Mark new
+                        </button>
+                        <button type="button" className="ghost-btn" onClick={() => void updateMessageStatus(message, 'replied')}>
+                          Mark replied
+                        </button>
+                        <button type="button" className="ghost-btn" onClick={() => void updateMessageStatus(message, 'archived')}>
+                          Archive
+                        </button>
+                      </div>
+                    </article>
+                  ))
+                )}
+                <div className="admin-pagination">
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    disabled={messages.page <= 1}
+                    onClick={() => {
+                      const nextPage = Math.max(1, messages.page - 1)
+                      setMessagePage(nextPage)
+                      void loadMessages(nextPage)
+                    }}
+                  >
+                    Previous
+                  </button>
+                  <span>Page {messages.page} of {messages.totalPages}</span>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    disabled={messages.page >= messages.totalPages}
+                    onClick={() => {
+                      const nextPage = Math.min(messages.totalPages, messages.page + 1)
+                      setMessagePage(nextPage)
+                      void loadMessages(nextPage)
+                    }}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              <aside className="admin-reply-card">
+                <div className="admin-reply-head">
+                  <div>
+                    <div className="section-kicker">Reply</div>
+                    <h4>{replyEditor.email ? `Reply to ${replyEditor.email}` : 'Select a message'}</h4>
+                  </div>
+                  {replyEditor.messageId && (
+                    <button type="button" className="ghost-btn" onClick={() => setReplyEditor({ ...EMPTY_REPLY })}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {replyEditor.messageId ? (
+                  <div className="admin-form-stack">
+                    <label>
+                      Subject
+                      <input
+                        value={replyEditor.subject}
+                        onChange={(event) => setReplyEditor((current) => ({ ...current, subject: event.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Provider
+                      <select
+                        value={replyEditor.preferredProvider}
+                        onChange={(event) => setReplyEditor((current) => ({ ...current, preferredProvider: event.target.value }))}
+                      >
+                        <option value="auto">Auto</option>
+                        <option value="smtp">SMTP</option>
+                        <option value="resend">Resend</option>
+                      </select>
+                    </label>
+                    <label>
+                      Reply body
+                      <textarea
+                        rows={12}
+                        value={replyEditor.body}
+                        onChange={(event) => setReplyEditor((current) => ({ ...current, body: event.target.value }))}
+                      />
+                    </label>
+                    <div className="admin-template-hint">
+                      This sends immediately from the configured email sender and sets replies to your admin address.
                     </div>
-                    <p>{message.message}</p>
                     <div className="admin-inline-actions">
-                      <small className="muted">{formatDateTime(message.createdAt)}</small>
-                      <button type="button" className="ghost-btn" onClick={() => void updateMessageStatus(message, 'new')}>
-                        Mark new
-                      </button>
-                      <button type="button" className="ghost-btn" onClick={() => void updateMessageStatus(message, 'replied')}>
-                        Mark replied
-                      </button>
-                      <button type="button" className="ghost-btn" onClick={() => void updateMessageStatus(message, 'archived')}>
-                        Archive
+                      <button type="button" className="login-btn" onClick={() => void sendReply()} disabled={replyBusy}>
+                        {replyBusy ? 'Sending...' : 'Send reply'}
                       </button>
                     </div>
-                  </article>
-                ))
-              )}
-            </div>
-            <div className="admin-pagination">
-              <button
-                type="button"
-                className="ghost-btn"
-                disabled={messages.page <= 1}
-                onClick={() => {
-                  const nextPage = Math.max(1, messages.page - 1)
-                  setMessagePage(nextPage)
-                  void loadMessages(nextPage)
-                }}
-              >
-                Previous
-              </button>
-              <span>Page {messages.page} of {messages.totalPages}</span>
-              <button
-                type="button"
-                className="ghost-btn"
-                disabled={messages.page >= messages.totalPages}
-                onClick={() => {
-                  const nextPage = Math.min(messages.totalPages, messages.page + 1)
-                  setMessagePage(nextPage)
-                  void loadMessages(nextPage)
-                }}
-              >
-                Next
-              </button>
+                  </div>
+                ) : (
+                  <div className="admin-empty-state">
+                    Pick a message and the reply composer will open here.
+                  </div>
+                )}
+              </aside>
             </div>
           </SectionShell>
         </div>
@@ -1287,6 +1450,10 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                   Supported variables: <code>{'{{userName}}'}</code>, <code>{'{{username}}'}</code>, <code>{'{{email}}'}</code>, <code>{'{{signupDate}}'}</code>
                 </div>
 
+                <div className="admin-composer-note">
+                  Send now is for one-to-one or small-group email from the admin workspace. Bulk delivery should still use queue send so provider limits stay safe.
+                </div>
+
                 <div className="admin-inline-actions wrap">
                   <button type="submit" className="login-btn">Save draft</button>
                   <button type="button" className="ghost-btn" onClick={() => void previewCampaign()}>
@@ -1294,6 +1461,9 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                   </button>
                   <button type="button" className="ghost-btn" onClick={() => void queueCampaign('test')}>
                     Send test to admin
+                  </button>
+                  <button type="button" className="ghost-btn" onClick={() => void sendCampaignNow()} disabled={!campaignEditor.id || sendNowBusy}>
+                    {sendNowBusy ? 'Sending...' : 'Send now'}
                   </button>
                   <button type="button" className="ghost-btn" onClick={() => void queueCampaign('queue')}>
                     Queue send
@@ -1312,6 +1482,12 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
 
               <div className="admin-preview-card">
                 <h4>Preview</h4>
+                <div className="admin-preview-meta">
+                  <span>Target: {campaignEditor.targetMode}</span>
+                  <span>
+                    Recipients: {campaignEditor.targetMode === 'all' ? 'all verified users' : parseRecipients(campaignEditor.selectedRecipients).length || 0}
+                  </span>
+                </div>
                 {previewSubject ? (
                   <>
                     <strong>{previewSubject}</strong>

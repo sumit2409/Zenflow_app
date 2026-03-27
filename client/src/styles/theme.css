@@ -4551,12 +4551,11 @@ textarea {
 
 .admin-grid {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
 
 .admin-section {
-  grid-column: span 12;
   display: grid;
   gap: 18px;
 }
@@ -4853,6 +4852,49 @@ textarea {
   gap: 10px;
 }
 
+.admin-composer-note,
+.admin-preview-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--ink-soft);
+}
+
+.admin-preview-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(79, 58, 41, 0.12);
+  background: rgba(247, 240, 231, 0.8);
+}
+
+.admin-message-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.85fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.admin-reply-card {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(255, 252, 249, 0.88);
+  display: grid;
+  gap: 14px;
+  position: sticky;
+  top: 110px;
+}
+
+.admin-reply-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
 .admin-subsection h4 {
   margin: 0;
 }
@@ -4861,24 +4903,12 @@ textarea {
   color: #9a5146;
 }
 
-@media (min-width: 980px) {
-  .admin-grid > .admin-section:nth-child(1):nth-last-child(2),
-  .admin-grid > .admin-section:nth-child(2):last-child {
-    grid-column: span 6;
-  }
-
-  .admin-grid > .admin-section:nth-child(1):nth-last-child(3),
-  .admin-grid > .admin-section:nth-child(2):nth-last-child(2),
-  .admin-grid > .admin-section:nth-child(3):last-child {
-    grid-column: span 4;
-  }
-}
-
 @media (max-width: 1100px) {
   .admin-metric-grid,
   .admin-field-grid,
   .admin-detail-grid,
-  .admin-campaign-layout {
+  .admin-campaign-layout,
+  .admin-message-layout {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -4902,7 +4932,8 @@ textarea {
   .admin-metric-grid,
   .admin-field-grid,
   .admin-detail-grid,
-  .admin-campaign-layout {
+  .admin-campaign-layout,
+  .admin-message-layout {
     grid-template-columns: 1fr;
   }
 
@@ -4913,5 +4944,9 @@ textarea {
 
   .admin-tab {
     flex: 0 0 auto;
+  }
+
+  .admin-reply-card {
+    position: static;
   }
 }
