@@ -23,6 +23,12 @@ services:
         sync: false
       - key: GEMINI_COACH_MODEL
         sync: false
+      - key: EMAIL_QUEUE_BATCH_SIZE
+        sync: false
+      - key: EMAIL_QUEUE_INTERVAL_MS
+        sync: false
+      - key: EMAIL_QUEUE_MAX_ATTEMPTS
+        sync: false
       - key: WEEKLY_WELLNESS_EMAILS_ENABLED
         sync: false
       - key: WEEKLY_WELLNESS_EMAILS_DAY_UTC

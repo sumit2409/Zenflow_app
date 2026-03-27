@@ -45,6 +45,13 @@ const WEEKLY_WELLNESS_LAST_SENT_SETTING_KEY = 'campaign:weekly-wellness:last-sen
 const COACH_HISTORY_LIMIT = 10
 const COACH_MESSAGE_CHAR_LIMIT = 1600
 const COACH_RESPONSE_TIMEOUT_MS = 20000
+const ADMIN_EMAIL = 'contactsumit2409@gmail.com'
+const EMAIL_QUEUE_BATCH_SIZE = clampIntegerEnv(process.env.EMAIL_QUEUE_BATCH_SIZE, 8, 1, 100)
+const EMAIL_QUEUE_INTERVAL_MS = clampIntegerEnv(process.env.EMAIL_QUEUE_INTERVAL_MS, 60000, 5000, 600000)
+const EMAIL_QUEUE_MAX_ATTEMPTS = clampIntegerEnv(process.env.EMAIL_QUEUE_MAX_ATTEMPTS, 4, 1, 10)
+const CONTACT_MESSAGE_CHAR_LIMIT = 5000
+const ADMIN_LIST_PAGE_SIZE = 20
+const ADMIN_LIST_PAGE_SIZE_MAX = 100
 
 const DATA_FILE = path.join(__dirname, 'data.json')
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
@@ -59,6 +66,8 @@ let mailTransporter = null
 let useFileStorage = false
 let weeklyWellnessInterval = null
 let weeklyWellnessJobRunning = false
+let emailQueueInterval = null
+let emailQueueRunning = false
 let cachedIndexHtml = null
 
 function clampIntegerEnv(rawValue, fallback, min, max) {
@@ -247,11 +256,108 @@ const settingSchema = new mongoose.Schema({
   key: { type: String, unique: true },
   value: mongoose.Schema.Types.Mixed,
 })
+const contactMessageSchema = new mongoose.Schema({
+  _id: String,
+  fullName: String,
+  email: String,
+  message: String,
+  source: { type: String, default: 'contact-form' },
+  status: { type: String, default: 'new' },
+  createdAt: Number,
+  updatedAt: Number,
+  repliedAt: Number,
+})
+const emailTemplateSchema = new mongoose.Schema({
+  _id: String,
+  name: String,
+  kind: { type: String, default: 'general' },
+  subject: String,
+  body: String,
+  createdBy: String,
+  updatedBy: String,
+  createdAt: Number,
+  updatedAt: Number,
+})
+const emailCampaignSchema = new mongoose.Schema({
+  _id: String,
+  name: String,
+  kind: { type: String, default: 'one_off' },
+  targetMode: { type: String, default: 'selected' },
+  selectedRecipients: [String],
+  subject: String,
+  body: String,
+  templateId: String,
+  status: { type: String, default: 'draft' },
+  preferredProvider: { type: String, default: 'auto' },
+  scheduleEnabled: { type: Boolean, default: false },
+  scheduleHourUtc: { type: Number, default: 9 },
+  scheduleMinuteUtc: { type: Number, default: 0 },
+  lastScheduledDateKey: String,
+  createdBy: String,
+  updatedBy: String,
+  createdAt: Number,
+  updatedAt: Number,
+})
+const emailCampaignRunSchema = new mongoose.Schema({
+  _id: String,
+  campaignId: String,
+  campaignName: String,
+  campaignKind: String,
+  targetMode: String,
+  recipientCount: Number,
+  sentCount: { type: Number, default: 0 },
+  failedCount: { type: Number, default: 0 },
+  pendingCount: { type: Number, default: 0 },
+  status: { type: String, default: 'queued' },
+  subject: String,
+  body: String,
+  createdBy: String,
+  startedAt: Number,
+  completedAt: Number,
+  createdAt: Number,
+  updatedAt: Number,
+})
+const emailJobSchema = new mongoose.Schema({
+  _id: String,
+  campaignId: String,
+  runId: String,
+  username: String,
+  toEmail: String,
+  toName: String,
+  subject: String,
+  bodyText: String,
+  bodyHtml: String,
+  preferredProvider: { type: String, default: 'auto' },
+  status: { type: String, default: 'pending' },
+  attemptCount: { type: Number, default: 0 },
+  nextAttemptAt: Number,
+  lastError: String,
+  sentAt: Number,
+  createdAt: Number,
+  updatedAt: Number,
+})
+const auditLogSchema = new mongoose.Schema({
+  _id: String,
+  actorUsername: String,
+  actorEmail: String,
+  action: String,
+  targetType: String,
+  targetId: String,
+  summary: String,
+  metadata: mongoose.Schema.Types.Mixed,
+  createdAt: Number,
+})
 
 let User
 let Log
 let Meta
 let Setting
+let ContactMessage
+let EmailTemplate
+let EmailCampaign
+let EmailCampaignRun
+let EmailJob
+let AuditLog
 
 function normalizeUsername(username) {
   return String(username || '').trim()
@@ -310,13 +416,20 @@ function validateRegistration({ username, email, fullName, password, confirmPass
 
 function readData() {
   if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify({ users: {}, logs: {}, meta: {}, system: {} }, null, 2), 'utf8')
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ users: {}, logs: {}, meta: {}, system: {}, admin: {} }, null, 2), 'utf8')
   }
   const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))
   parsed.users = parsed.users || {}
   parsed.logs = parsed.logs || {}
   parsed.meta = parsed.meta || {}
   parsed.system = parsed.system || {}
+  parsed.admin = parsed.admin || {}
+  parsed.admin.contactMessages = Array.isArray(parsed.admin.contactMessages) ? parsed.admin.contactMessages : []
+  parsed.admin.emailTemplates = Array.isArray(parsed.admin.emailTemplates) ? parsed.admin.emailTemplates : []
+  parsed.admin.emailCampaigns = Array.isArray(parsed.admin.emailCampaigns) ? parsed.admin.emailCampaigns : []
+  parsed.admin.emailCampaignRuns = Array.isArray(parsed.admin.emailCampaignRuns) ? parsed.admin.emailCampaignRuns : []
+  parsed.admin.emailJobs = Array.isArray(parsed.admin.emailJobs) ? parsed.admin.emailJobs : []
+  parsed.admin.auditLogs = Array.isArray(parsed.admin.auditLogs) ? parsed.admin.auditLogs : []
   return parsed
 }
 
@@ -886,6 +999,7 @@ function buildAccount(user) {
     lastLoginAt: user.lastLoginAt || null,
     loginCount: Number(user.loginCount || 0),
     emailVerified: isEmailVerified(user),
+    isAdmin: isAdminUser(user),
   }
 }
 
@@ -897,6 +1011,244 @@ function buildAnalyticsUserId(user) {
     .createHmac('sha256', `${JWT_SECRET}:ga4-user-id`)
     .update(String(seed))
     .digest('hex')
+}
+
+function isAdminEmail(email) {
+  return normalizeEmail(email) === ADMIN_EMAIL
+}
+
+function isAdminUser(user) {
+  return Boolean(user) && isAdminEmail(user?.email || user?.emailLower || '') && isEmailVerified(user)
+}
+
+function createRecordId(prefix) {
+  return `${prefix}_${crypto.randomBytes(10).toString('hex')}`
+}
+
+function sanitizeSingleLine(value, maxLength = 180) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength)
+}
+
+function sanitizeMultiline(value, maxLength = 20000) {
+  return String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\u0000/g, '')
+    .trim()
+    .slice(0, maxLength)
+}
+
+function clampPage(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 1) return 1
+  return Math.floor(parsed)
+}
+
+function clampPageSize(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 1) return ADMIN_LIST_PAGE_SIZE
+  return Math.min(ADMIN_LIST_PAGE_SIZE_MAX, Math.floor(parsed))
+}
+
+function normalizeSelectedRecipients(values) {
+  const raw = Array.isArray(values) ? values : []
+  return Array.from(
+    new Set(
+      raw
+        .map((value) => sanitizeSingleLine(value, 120).toLowerCase())
+        .filter(Boolean)
+    )
+  ).slice(0, 5000)
+}
+
+function ensureAdminStore(data) {
+  data.admin = data.admin || {}
+  data.admin.contactMessages = Array.isArray(data.admin.contactMessages) ? data.admin.contactMessages : []
+  data.admin.emailTemplates = Array.isArray(data.admin.emailTemplates) ? data.admin.emailTemplates : []
+  data.admin.emailCampaigns = Array.isArray(data.admin.emailCampaigns) ? data.admin.emailCampaigns : []
+  data.admin.emailCampaignRuns = Array.isArray(data.admin.emailCampaignRuns) ? data.admin.emailCampaignRuns : []
+  data.admin.emailJobs = Array.isArray(data.admin.emailJobs) ? data.admin.emailJobs : []
+  data.admin.auditLogs = Array.isArray(data.admin.auditLogs) ? data.admin.auditLogs : []
+  return data.admin
+}
+
+function formatEmailDateKey(date = new Date()) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
+}
+
+function formatPlainTextAsHtml(text) {
+  const safe = escapeHtml(text)
+  const paragraphs = safe.split(/\n{2,}/).filter(Boolean)
+  return paragraphs.map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br />')}</p>`).join('')
+}
+
+function buildTemplateVariables(user) {
+  const signupValue = user?.created ? new Date(user.created).toLocaleDateString() : 'Not available'
+  return {
+    userName: sanitizeSingleLine(user?.fullName || user?.username || 'there', 120) || 'there',
+    username: sanitizeSingleLine(user?.username || '', 120),
+    email: normalizeEmail(user?.email || user?.emailLower || ''),
+    signupDate: signupValue,
+  }
+}
+
+function renderTemplateString(template, variables) {
+  return String(template || '').replace(/\{\{\s*(userName|username|email|signupDate)\s*\}\}/g, (_, key) => variables[key] || '')
+}
+
+function buildRenderedEmailContent({ subject, body, user }) {
+  const variables = buildTemplateVariables(user)
+  const renderedSubject = renderTemplateString(subject, variables)
+  const renderedBody = renderTemplateString(body, variables)
+  return {
+    subject: renderedSubject,
+    text: renderedBody,
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.7;color:#2f241e">
+        ${formatPlainTextAsHtml(renderedBody)}
+      </div>
+    `,
+  }
+}
+
+function summarizeAdminUser(user, meta, logs) {
+  const totalPoints = logs.reduce((sum, entry) => sum + calculateLogPoints(entry.type, entry.value), 0)
+  const last7Summary = summarizeCoachLogs(logs, buildRecentCoachDateKeys(7))
+  const lastActivity = logs
+    .map((entry) => entry.date)
+    .sort((left, right) => right.localeCompare(left))[0] || null
+
+  return {
+    username: user.username,
+    fullName: user.fullName || user.username,
+    email: user.email || '',
+    created: user.created || null,
+    lastLoginAt: user.lastLoginAt || null,
+    loginCount: Number(user.loginCount || 0),
+    emailVerified: isEmailVerified(user),
+    authProvider: user.authProvider || (user.googleId ? 'google' : 'local'),
+    isAdmin: isAdminUser(user),
+    totalPoints,
+    recentActiveDays: last7Summary.activeDays,
+    recentFocusMinutes: last7Summary.totals.pomodoro,
+    lastActivityDate: lastActivity,
+    noteDates: Object.keys(meta?.journals || {}).length,
+    todoDates: Object.keys(meta?.todosByDate || {}).length,
+  }
+}
+
+async function loadAllUsersWithData() {
+  if (useFileStorage) {
+    const data = readData()
+    return Object.entries(data.users || {}).map(([username, user]) => {
+      const userLogs = []
+      const logTree = data.logs?.[username] || {}
+
+      Object.entries(logTree).forEach(([date, types]) => {
+        if (typeof types === 'number') {
+          userLogs.push({ date, type: 'legacy', value: types })
+          return
+        }
+
+        Object.entries(types || {}).forEach(([type, value]) => {
+          userLogs.push({ date, type, value: Number(value || 0) })
+        })
+      })
+
+      return {
+        user: { ...user, username },
+        meta: data.meta?.[username] || {},
+        logs: userLogs,
+      }
+    })
+  }
+
+  const [users, metas, logs] = await Promise.all([
+    User.find({}).lean().exec(),
+    Meta.find({}).lean().exec(),
+    Log.find({}).lean().exec(),
+  ])
+
+  const metaByUser = metas.reduce((acc, entry) => {
+    acc[entry.user] = entry.meta || {}
+    return acc
+  }, {})
+  const logsByUser = logs.reduce((acc, entry) => {
+    acc[entry.user] = acc[entry.user] || []
+    acc[entry.user].push({
+      date: entry.date,
+      type: entry.type,
+      value: Number(entry.value || 0),
+    })
+    return acc
+  }, {})
+
+  return users.map((user) => ({
+    user,
+    meta: metaByUser[user.username] || {},
+    logs: logsByUser[user.username] || [],
+  }))
+}
+
+async function findCurrentUserRecord(username) {
+  if (useFileStorage) {
+    const data = readData()
+    return data.users?.[username] ? { ...data.users[username], username } : null
+  }
+
+  return User.findOne({ username }).lean().exec()
+}
+
+async function recordAuditLog({ actorUser, action, targetType = '', targetId = '', summary = '', metadata = {} }) {
+  const entry = {
+    id: createRecordId('audit'),
+    actorUsername: actorUser?.username || '',
+    actorEmail: normalizeEmail(actorUser?.email || actorUser?.emailLower || ''),
+    action: sanitizeSingleLine(action, 120),
+    targetType: sanitizeSingleLine(targetType, 80),
+    targetId: sanitizeSingleLine(targetId, 120),
+    summary: sanitizeSingleLine(summary, 240),
+    metadata,
+    createdAt: Date.now(),
+  }
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    admin.auditLogs.unshift(entry)
+    admin.auditLogs = admin.auditLogs.slice(0, 500)
+    writeData(data)
+    return entry
+  }
+
+  const doc = new AuditLog({
+    _id: entry.id,
+    actorUsername: entry.actorUsername,
+    actorEmail: entry.actorEmail,
+    action: entry.action,
+    targetType: entry.targetType,
+    targetId: entry.targetId,
+    summary: entry.summary,
+    metadata: entry.metadata,
+    createdAt: entry.createdAt,
+  })
+  await doc.save()
+  return doc.toObject()
+}
+
+async function maybeRecordAdminAuthEvent(user, action = 'admin.login') {
+  if (!isAdminUser(user)) return
+
+  try {
+    await recordAuditLog({
+      actorUser: user,
+      action,
+      targetType: 'admin',
+      targetId: user.username,
+      summary: `${user.username} completed ${action}`,
+    })
+  } catch (error) {
+    console.error('Admin auth audit failed:', error)
+  }
 }
 
 async function generateUniqueDbUsername(seed) {
@@ -1595,6 +1947,12 @@ async function connectDb() {
     Log = mongoose.model('Log', logSchema)
     Meta = mongoose.model('Meta', metaSchema)
     Setting = mongoose.model('Setting', settingSchema)
+    ContactMessage = mongoose.model('ContactMessage', contactMessageSchema)
+    EmailTemplate = mongoose.model('EmailTemplate', emailTemplateSchema)
+    EmailCampaign = mongoose.model('EmailCampaign', emailCampaignSchema)
+    EmailCampaignRun = mongoose.model('EmailCampaignRun', emailCampaignRunSchema)
+    EmailJob = mongoose.model('EmailJob', emailJobSchema)
+    AuditLog = mongoose.model('AuditLog', auditLogSchema)
     console.log('Connected to MongoDB')
     useFileStorage = false
   } catch (err) {
@@ -1612,6 +1970,7 @@ async function connectDb() {
   }
 
   startWeeklyWellnessScheduler()
+  startEmailQueueScheduler()
 }
 
 connectDb()
@@ -1670,6 +2029,46 @@ app.get('/api/auth/config', (req, res) => {
   })
 })
 
+app.post('/api/contact', async (req, res) => {
+  const fullName = sanitizeSingleLine(req.body?.fullName, 120)
+  const email = normalizeEmail(req.body?.email)
+  const message = sanitizeMultiline(req.body?.message, CONTACT_MESSAGE_CHAR_LIMIT)
+
+  if (!fullName || fullName.length < 2) {
+    return res.status(400).json({ error: 'full name is required' })
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'enter a valid email address' })
+  }
+  if (!message || message.length < 10) {
+    return res.status(400).json({ error: 'message must be at least 10 characters' })
+  }
+
+  try {
+    const stored = await createContactMessageRecord({ fullName, email, message })
+    await sendTransactionalEmail({
+      to: ADMIN_EMAIL,
+      subject: `Zenflow contact message from ${fullName}`,
+      text: `From: ${fullName} <${email}>\n\n${message}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.7;color:#2f241e">
+          <p><strong>From:</strong> ${escapeHtml(fullName)} &lt;${escapeHtml(email)}&gt;</p>
+          ${formatPlainTextAsHtml(message)}
+        </div>
+      `,
+    })
+
+    return res.json({
+      ok: true,
+      message: 'Your message was sent. We will reply as soon as possible.',
+      referenceId: stored.id || stored._id,
+    })
+  } catch (error) {
+    console.error('Contact submission failed:', error)
+    return res.status(500).json({ error: 'Could not send your message right now.' })
+  }
+})
+
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization
   if (!auth) return res.status(401).json({ error: 'missing auth' })
@@ -1708,6 +2107,728 @@ async function findDbUser(identifier) {
   return User.findOne({
     $or: [{ usernameLower: lowered }, { emailLower: lowered }, { username: normalized }],
   }).exec()
+}
+
+async function loadRequestUser(username) {
+  return findCurrentUserRecord(username)
+}
+
+async function adminMiddleware(req, res, next) {
+  try {
+    const user = await loadRequestUser(req.user)
+    if (!user) return res.status(404).json({ error: 'user not found' })
+    if (!isAdminUser(user)) return res.status(403).json({ error: 'admin access denied' })
+    req.adminUser = user
+    next()
+  } catch (error) {
+    console.error('Admin auth failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+}
+
+async function listAdminUsers({ search = '', filter = 'all', sort = 'created_desc', page = 1, pageSize = ADMIN_LIST_PAGE_SIZE } = {}) {
+  const directory = (await loadAllUsersWithData()).map(({ user, meta, logs }) => summarizeAdminUser(user, meta, logs))
+  const normalizedSearch = sanitizeSingleLine(search, 120).toLowerCase()
+  const searched = normalizedSearch
+    ? directory.filter((entry) =>
+      [entry.username, entry.fullName, entry.email]
+        .map((value) => String(value || '').toLowerCase())
+        .some((value) => value.includes(normalizedSearch))
+    )
+    : directory
+  const normalizedFilter = sanitizeSingleLine(filter, 40) || 'all'
+  const filtered = searched.filter((entry) => {
+    if (normalizedFilter === 'verified') return Boolean(entry.emailVerified)
+    if (normalizedFilter === 'unverified') return !entry.emailVerified
+    if (normalizedFilter === 'active') return Number(entry.recentActiveDays || 0) > 0
+    if (normalizedFilter === 'inactive') return Number(entry.recentActiveDays || 0) === 0
+    return true
+  })
+
+  const sorters = {
+    created_desc: (left, right) => Number(right.created || 0) - Number(left.created || 0),
+    created_asc: (left, right) => Number(left.created || 0) - Number(right.created || 0),
+    login_desc: (left, right) => Number(right.lastLoginAt || 0) - Number(left.lastLoginAt || 0),
+    points_desc: (left, right) => Number(right.totalPoints || 0) - Number(left.totalPoints || 0),
+    email_asc: (left, right) => String(left.email || '').localeCompare(String(right.email || '')),
+    username_asc: (left, right) => String(left.username || '').localeCompare(String(right.username || '')),
+  }
+
+  const sorter = sorters[sort] || sorters.created_desc
+  const sorted = [...filtered].sort(sorter)
+  const safePage = clampPage(page)
+  const wantsAll = String(pageSize || '').toLowerCase() === 'all'
+  const safePageSize = wantsAll ? Math.max(filtered.length, 1) : clampPageSize(pageSize)
+  const total = sorted.length
+  const start = (safePage - 1) * safePageSize
+
+  return {
+    items: sorted.slice(start, start + safePageSize),
+    total,
+    page: safePage,
+    pageSize: safePageSize,
+    totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+  }
+}
+
+async function getAdminUserDetail(username) {
+  const cleanUsername = sanitizeSingleLine(username, 80)
+  const directory = await loadAllUsersWithData()
+  const match = directory.find((entry) => entry.user.username === cleanUsername)
+  if (!match) return null
+
+  const summary = summarizeAdminUser(match.user, match.meta, match.logs)
+  const recentLogs = [...match.logs]
+    .sort((left, right) => String(right.date).localeCompare(String(left.date)))
+    .slice(0, 40)
+  const meta = match.meta || {}
+
+  return {
+    user: summary,
+    rawProfile: {
+      heightCm: meta.profile?.heightCm || '',
+      weightKg: meta.profile?.weightKg || '',
+      dateOfBirth: meta.profile?.dateOfBirth || '',
+    },
+    planner: meta.planner || {},
+    recentLogs,
+    journals: meta.journals || {},
+    todosByDate: meta.todosByDate || {},
+  }
+}
+
+async function listContactMessages({ search = '', page = 1, pageSize = ADMIN_LIST_PAGE_SIZE } = {}) {
+  const safePage = clampPage(page)
+  const safePageSize = clampPageSize(pageSize)
+  const normalizedSearch = sanitizeSingleLine(search, 120).toLowerCase()
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    const records = [...admin.contactMessages]
+      .filter((entry) => !normalizedSearch || [entry.fullName, entry.email, entry.message].some((field) => String(field || '').toLowerCase().includes(normalizedSearch)))
+      .sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
+
+    const total = records.length
+    const start = (safePage - 1) * safePageSize
+    return {
+      items: records.slice(start, start + safePageSize),
+      total,
+      page: safePage,
+      pageSize: safePageSize,
+      totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+    }
+  }
+
+  const filter = normalizedSearch
+    ? {
+      $or: [
+        { fullName: { $regex: normalizedSearch, $options: 'i' } },
+        { email: { $regex: normalizedSearch, $options: 'i' } },
+        { message: { $regex: normalizedSearch, $options: 'i' } },
+      ],
+    }
+    : {}
+
+  const [items, total] = await Promise.all([
+    ContactMessage.find(filter).sort({ createdAt: -1 }).skip((safePage - 1) * safePageSize).limit(safePageSize).lean().exec(),
+    ContactMessage.countDocuments(filter).exec(),
+  ])
+
+  return {
+    items,
+    total,
+    page: safePage,
+    pageSize: safePageSize,
+    totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+  }
+}
+
+async function createContactMessageRecord({ fullName, email, message, source = 'contact-form' }) {
+  const record = {
+    id: createRecordId('msg'),
+    fullName: sanitizeSingleLine(fullName, 120),
+    email: normalizeEmail(email),
+    message: sanitizeMultiline(message, CONTACT_MESSAGE_CHAR_LIMIT),
+    source: sanitizeSingleLine(source, 40) || 'contact-form',
+    status: 'new',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    repliedAt: null,
+  }
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    admin.contactMessages.unshift(record)
+    writeData(data)
+    return record
+  }
+
+  const doc = new ContactMessage({
+    _id: record.id,
+    fullName: record.fullName,
+    email: record.email,
+    message: record.message,
+    source: record.source,
+    status: record.status,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    repliedAt: record.repliedAt,
+  })
+  await doc.save()
+  return doc.toObject()
+}
+
+async function updateContactMessageRecord(id, patch) {
+  const cleanId = sanitizeSingleLine(id, 80)
+  const nextPatch = {
+    ...patch,
+    updatedAt: Date.now(),
+  }
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    const index = admin.contactMessages.findIndex((entry) => entry.id === cleanId)
+    if (index < 0) return null
+    admin.contactMessages[index] = { ...admin.contactMessages[index], ...nextPatch }
+    writeData(data)
+    return admin.contactMessages[index]
+  }
+
+  const updated = await ContactMessage.findOneAndUpdate({ _id: cleanId }, nextPatch, { new: true }).lean().exec()
+  return updated || null
+}
+
+async function listEmailTemplates() {
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    return [...admin.emailTemplates].sort((left, right) => Number(right.updatedAt || 0) - Number(left.updatedAt || 0))
+  }
+
+  return EmailTemplate.find({}).sort({ updatedAt: -1 }).lean().exec()
+}
+
+async function upsertEmailTemplateRecord(template) {
+  const now = Date.now()
+  const sanitized = {
+    id: template.id || createRecordId('tmpl'),
+    name: sanitizeSingleLine(template.name, 120),
+    kind: sanitizeSingleLine(template.kind, 40) || 'general',
+    subject: sanitizeSingleLine(template.subject, 220),
+    body: sanitizeMultiline(template.body, 20000),
+    createdBy: sanitizeSingleLine(template.createdBy, 80),
+    updatedBy: sanitizeSingleLine(template.updatedBy, 80),
+    createdAt: Number(template.createdAt || now),
+    updatedAt: now,
+  }
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    const index = admin.emailTemplates.findIndex((entry) => entry.id === sanitized.id)
+    if (index >= 0) {
+      admin.emailTemplates[index] = { ...admin.emailTemplates[index], ...sanitized }
+    } else {
+      admin.emailTemplates.unshift(sanitized)
+    }
+    writeData(data)
+    return sanitized
+  }
+
+  const existing = await EmailTemplate.findOne({ _id: sanitized.id }).lean().exec()
+  const payload = {
+    name: sanitized.name,
+    kind: sanitized.kind,
+    subject: sanitized.subject,
+    body: sanitized.body,
+    createdBy: existing?.createdBy || sanitized.createdBy,
+    updatedBy: sanitized.updatedBy,
+    createdAt: existing?.createdAt || sanitized.createdAt,
+    updatedAt: sanitized.updatedAt,
+  }
+  await EmailTemplate.findOneAndUpdate({ _id: sanitized.id }, payload, { upsert: true }).exec()
+  return { ...payload, _id: sanitized.id, id: sanitized.id }
+}
+
+async function listEmailCampaigns() {
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    return [...admin.emailCampaigns].sort((left, right) => Number(right.updatedAt || 0) - Number(left.updatedAt || 0))
+  }
+
+  return EmailCampaign.find({}).sort({ updatedAt: -1 }).lean().exec()
+}
+
+async function getEmailCampaignRecord(id) {
+  const cleanId = sanitizeSingleLine(id, 80)
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    return admin.emailCampaigns.find((entry) => entry.id === cleanId) || null
+  }
+
+  const doc = await EmailCampaign.findById(cleanId).lean().exec()
+  return doc ? { ...doc, id: String(doc._id) } : null
+}
+
+async function upsertEmailCampaignRecord(campaign) {
+  const now = Date.now()
+  const sanitized = {
+    id: campaign.id || createRecordId('camp'),
+    name: sanitizeSingleLine(campaign.name, 140),
+    kind: sanitizeSingleLine(campaign.kind, 40) || 'one_off',
+    targetMode: sanitizeSingleLine(campaign.targetMode, 40) || 'selected',
+    selectedRecipients: normalizeSelectedRecipients(campaign.selectedRecipients),
+    subject: sanitizeSingleLine(campaign.subject, 220),
+    body: sanitizeMultiline(campaign.body, 20000),
+    templateId: sanitizeSingleLine(campaign.templateId, 80),
+    status: sanitizeSingleLine(campaign.status, 40) || 'draft',
+    preferredProvider: sanitizeSingleLine(campaign.preferredProvider, 20) || 'auto',
+    scheduleEnabled: Boolean(campaign.scheduleEnabled),
+    scheduleHourUtc: clampIntegerEnv(campaign.scheduleHourUtc, 9, 0, 23),
+    scheduleMinuteUtc: clampIntegerEnv(campaign.scheduleMinuteUtc, 0, 0, 59),
+    lastScheduledDateKey: sanitizeSingleLine(campaign.lastScheduledDateKey, 40),
+    createdBy: sanitizeSingleLine(campaign.createdBy, 80),
+    updatedBy: sanitizeSingleLine(campaign.updatedBy, 80),
+    createdAt: Number(campaign.createdAt || now),
+    updatedAt: now,
+  }
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    const index = admin.emailCampaigns.findIndex((entry) => entry.id === sanitized.id)
+    if (index >= 0) {
+      admin.emailCampaigns[index] = { ...admin.emailCampaigns[index], ...sanitized }
+    } else {
+      admin.emailCampaigns.unshift(sanitized)
+    }
+    writeData(data)
+    return sanitized
+  }
+
+  const existing = await EmailCampaign.findById(sanitized.id).lean().exec()
+  const payload = {
+    name: sanitized.name,
+    kind: sanitized.kind,
+    targetMode: sanitized.targetMode,
+    selectedRecipients: sanitized.selectedRecipients,
+    subject: sanitized.subject,
+    body: sanitized.body,
+    templateId: sanitized.templateId,
+    status: sanitized.status,
+    preferredProvider: sanitized.preferredProvider,
+    scheduleEnabled: sanitized.scheduleEnabled,
+    scheduleHourUtc: sanitized.scheduleHourUtc,
+    scheduleMinuteUtc: sanitized.scheduleMinuteUtc,
+    lastScheduledDateKey: sanitized.lastScheduledDateKey,
+    createdBy: existing?.createdBy || sanitized.createdBy,
+    updatedBy: sanitized.updatedBy,
+    createdAt: existing?.createdAt || sanitized.createdAt,
+    updatedAt: sanitized.updatedAt,
+  }
+  await EmailCampaign.findOneAndUpdate({ _id: sanitized.id }, payload, { upsert: true }).exec()
+  return { ...payload, _id: sanitized.id, id: sanitized.id }
+}
+
+async function duplicateEmailCampaignRecord(id, actorUsername) {
+  const existing = await getEmailCampaignRecord(id)
+  if (!existing) return null
+
+  return upsertEmailCampaignRecord({
+    ...existing,
+    id: null,
+    name: `${existing.name || 'Campaign'} copy`,
+    status: 'draft',
+    lastScheduledDateKey: '',
+    createdBy: actorUsername,
+    updatedBy: actorUsername,
+    createdAt: Date.now(),
+  })
+}
+
+async function listEmailCampaignRuns(limit = 50) {
+  const safeLimit = Math.min(200, Math.max(1, Number(limit || 50)))
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    return [...admin.emailCampaignRuns].sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0)).slice(0, safeLimit)
+  }
+
+  return EmailCampaignRun.find({}).sort({ createdAt: -1 }).limit(safeLimit).lean().exec()
+}
+
+async function listEmailJobs(limit = 100) {
+  const safeLimit = Math.min(500, Math.max(1, Number(limit || 100)))
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    return [...admin.emailJobs].sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0)).slice(0, safeLimit)
+  }
+
+  return EmailJob.find({}).sort({ createdAt: -1 }).limit(safeLimit).lean().exec()
+}
+
+async function resolveCampaignRecipients(campaign) {
+  const mode = sanitizeSingleLine(campaign?.targetMode, 40) || 'selected'
+  const usersWithData = await loadAllUsersWithData()
+  const recipients = usersWithData
+    .map(({ user }) => user)
+    .filter(userCanReceiveCampaigns)
+
+  if (mode === 'all') {
+    return recipients
+  }
+
+  if (mode === 'one') {
+    const first = normalizeSelectedRecipients(campaign?.selectedRecipients).slice(0, 1)
+    return recipients.filter((user) => first.includes(String(user.username || '').toLowerCase()) || first.includes(String(user.email || '').toLowerCase()))
+  }
+
+  const selected = normalizeSelectedRecipients(campaign?.selectedRecipients)
+  return recipients.filter((user) => selected.includes(String(user.username || '').toLowerCase()) || selected.includes(String(user.email || '').toLowerCase()))
+}
+
+async function createCampaignRunRecord(run) {
+  const payload = {
+    id: run.id || createRecordId('run'),
+    campaignId: sanitizeSingleLine(run.campaignId, 80),
+    campaignName: sanitizeSingleLine(run.campaignName, 160),
+    campaignKind: sanitizeSingleLine(run.campaignKind, 40),
+    targetMode: sanitizeSingleLine(run.targetMode, 40),
+    recipientCount: Number(run.recipientCount || 0),
+    sentCount: Number(run.sentCount || 0),
+    failedCount: Number(run.failedCount || 0),
+    pendingCount: Number(run.pendingCount || 0),
+    status: sanitizeSingleLine(run.status, 40) || 'queued',
+    subject: sanitizeSingleLine(run.subject, 220),
+    body: sanitizeMultiline(run.body, 20000),
+    createdBy: sanitizeSingleLine(run.createdBy, 80),
+    startedAt: Number(run.startedAt || Date.now()),
+    completedAt: Number(run.completedAt || 0) || null,
+    createdAt: Number(run.createdAt || Date.now()),
+    updatedAt: Date.now(),
+  }
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    admin.emailCampaignRuns.unshift(payload)
+    writeData(data)
+    return payload
+  }
+
+  const doc = new EmailCampaignRun({
+    _id: payload.id,
+    campaignId: payload.campaignId,
+    campaignName: payload.campaignName,
+    campaignKind: payload.campaignKind,
+    targetMode: payload.targetMode,
+    recipientCount: payload.recipientCount,
+    sentCount: payload.sentCount,
+    failedCount: payload.failedCount,
+    pendingCount: payload.pendingCount,
+    status: payload.status,
+    subject: payload.subject,
+    body: payload.body,
+    createdBy: payload.createdBy,
+    startedAt: payload.startedAt,
+    completedAt: payload.completedAt,
+    createdAt: payload.createdAt,
+    updatedAt: payload.updatedAt,
+  })
+  await doc.save()
+  return { ...doc.toObject(), id: String(doc._id) }
+}
+
+async function updateCampaignRunRecord(id, patch) {
+  const cleanId = sanitizeSingleLine(id, 80)
+  const nextPatch = { ...patch, updatedAt: Date.now() }
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    const index = admin.emailCampaignRuns.findIndex((entry) => entry.id === cleanId)
+    if (index < 0) return null
+    admin.emailCampaignRuns[index] = { ...admin.emailCampaignRuns[index], ...nextPatch }
+    writeData(data)
+    return admin.emailCampaignRuns[index]
+  }
+
+  const updated = await EmailCampaignRun.findOneAndUpdate({ _id: cleanId }, nextPatch, { new: true }).lean().exec()
+  return updated ? { ...updated, id: String(updated._id) } : null
+}
+
+async function createEmailJobRecord(job) {
+  const payload = {
+    id: job.id || createRecordId('job'),
+    campaignId: sanitizeSingleLine(job.campaignId, 80),
+    runId: sanitizeSingleLine(job.runId, 80),
+    username: sanitizeSingleLine(job.username, 80),
+    toEmail: normalizeEmail(job.toEmail),
+    toName: sanitizeSingleLine(job.toName, 120),
+    subject: sanitizeSingleLine(job.subject, 220),
+    bodyText: sanitizeMultiline(job.bodyText, 20000),
+    bodyHtml: String(job.bodyHtml || ''),
+    preferredProvider: sanitizeSingleLine(job.preferredProvider, 20) || 'auto',
+    status: sanitizeSingleLine(job.status, 40) || 'pending',
+    attemptCount: Number(job.attemptCount || 0),
+    nextAttemptAt: Number(job.nextAttemptAt || Date.now()),
+    lastError: sanitizeSingleLine(job.lastError, 500),
+    sentAt: Number(job.sentAt || 0) || null,
+    createdAt: Number(job.createdAt || Date.now()),
+    updatedAt: Date.now(),
+  }
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    admin.emailJobs.push(payload)
+    writeData(data)
+    return payload
+  }
+
+  const doc = new EmailJob({
+    _id: payload.id,
+    campaignId: payload.campaignId,
+    runId: payload.runId,
+    username: payload.username,
+    toEmail: payload.toEmail,
+    toName: payload.toName,
+    subject: payload.subject,
+    bodyText: payload.bodyText,
+    bodyHtml: payload.bodyHtml,
+    preferredProvider: payload.preferredProvider,
+    status: payload.status,
+    attemptCount: payload.attemptCount,
+    nextAttemptAt: payload.nextAttemptAt,
+    lastError: payload.lastError,
+    sentAt: payload.sentAt,
+    createdAt: payload.createdAt,
+    updatedAt: payload.updatedAt,
+  })
+  await doc.save()
+  return { ...doc.toObject(), id: String(doc._id) }
+}
+
+async function updateEmailJobRecord(id, patch) {
+  const cleanId = sanitizeSingleLine(id, 80)
+  const nextPatch = { ...patch, updatedAt: Date.now() }
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    const index = admin.emailJobs.findIndex((entry) => entry.id === cleanId)
+    if (index < 0) return null
+    admin.emailJobs[index] = { ...admin.emailJobs[index], ...nextPatch }
+    writeData(data)
+    return admin.emailJobs[index]
+  }
+
+  const updated = await EmailJob.findOneAndUpdate({ _id: cleanId }, nextPatch, { new: true }).lean().exec()
+  return updated ? { ...updated, id: String(updated._id) } : null
+}
+
+async function refreshRunCounts(runId) {
+  const cleanId = sanitizeSingleLine(runId, 80)
+
+  if (useFileStorage) {
+    const data = readData()
+    const admin = ensureAdminStore(data)
+    const run = admin.emailCampaignRuns.find((entry) => entry.id === cleanId)
+    if (!run) return null
+    const jobs = admin.emailJobs.filter((entry) => entry.runId === cleanId)
+    run.sentCount = jobs.filter((entry) => entry.status === 'sent').length
+    run.failedCount = jobs.filter((entry) => entry.status === 'failed').length
+    run.pendingCount = jobs.filter((entry) => entry.status === 'pending' || entry.status === 'sending').length
+    run.status = run.pendingCount > 0 ? 'sending' : run.failedCount > 0 ? 'partial' : 'completed'
+    if (run.pendingCount === 0) {
+      run.completedAt = Date.now()
+    }
+    writeData(data)
+    return run
+  }
+
+  const jobs = await EmailJob.find({ runId: cleanId }).lean().exec()
+  const sentCount = jobs.filter((entry) => entry.status === 'sent').length
+  const failedCount = jobs.filter((entry) => entry.status === 'failed').length
+  const pendingCount = jobs.filter((entry) => entry.status === 'pending' || entry.status === 'sending').length
+  const status = pendingCount > 0 ? 'sending' : failedCount > 0 ? 'partial' : 'completed'
+  const patch = {
+    sentCount,
+    failedCount,
+    pendingCount,
+    status,
+    completedAt: pendingCount === 0 ? Date.now() : null,
+  }
+  const updated = await EmailCampaignRun.findOneAndUpdate({ _id: cleanId }, patch, { new: true }).lean().exec()
+  return updated ? { ...updated, id: String(updated._id) } : null
+}
+
+async function enqueueCampaignRun({ campaign, actorUser, testEmail = '' }) {
+  const recipients = testEmail
+    ? [{ username: actorUser.username, email: normalizeEmail(testEmail), fullName: actorUser.fullName || actorUser.username, created: actorUser.created }]
+    : await resolveCampaignRecipients(campaign)
+  const filteredRecipients = recipients.filter((entry) => normalizeEmail(entry.email))
+
+  const run = await createCampaignRunRecord({
+    campaignId: campaign.id || campaign._id,
+    campaignName: campaign.name,
+    campaignKind: campaign.kind,
+    targetMode: testEmail ? 'test' : campaign.targetMode,
+    recipientCount: filteredRecipients.length,
+    pendingCount: filteredRecipients.length,
+    status: filteredRecipients.length > 0 ? 'queued' : 'completed',
+    subject: campaign.subject,
+    body: campaign.body,
+    createdBy: actorUser.username,
+    startedAt: Date.now(),
+  })
+
+  for (const recipient of filteredRecipients) {
+    const rendered = buildRenderedEmailContent({
+      subject: campaign.subject,
+      body: campaign.body,
+      user: recipient,
+    })
+    await createEmailJobRecord({
+      campaignId: campaign.id || campaign._id,
+      runId: run.id || run._id,
+      username: recipient.username,
+      toEmail: recipient.email,
+      toName: recipient.fullName || recipient.username || recipient.email,
+      subject: rendered.subject,
+      bodyText: rendered.text,
+      bodyHtml: rendered.html,
+      preferredProvider: campaign.preferredProvider || 'auto',
+      status: 'pending',
+      attemptCount: 0,
+      nextAttemptAt: Date.now(),
+    })
+  }
+
+  await updateCampaignRunRecord(run.id || run._id, {
+    status: filteredRecipients.length > 0 ? 'queued' : 'completed',
+    pendingCount: filteredRecipients.length,
+    completedAt: filteredRecipients.length > 0 ? null : Date.now(),
+  })
+
+  return run
+}
+
+function buildRetryDelayMs(attemptCount) {
+  const safeAttempt = Math.max(1, Number(attemptCount || 1))
+  return Math.min(60 * 60 * 1000, safeAttempt * 5 * 60 * 1000)
+}
+
+async function maybeEnqueueDueDailyCampaigns() {
+  const todayKey = formatEmailDateKey()
+  const now = new Date()
+  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes()
+  const campaigns = (await listEmailCampaigns()).filter((campaign) => campaign.kind === 'daily' && campaign.status === 'scheduled' && campaign.scheduleEnabled)
+
+  for (const campaign of campaigns) {
+    const scheduledMinutes = Number(campaign.scheduleHourUtc || 0) * 60 + Number(campaign.scheduleMinuteUtc || 0)
+    if (campaign.lastScheduledDateKey === todayKey) continue
+    if (nowMinutes < scheduledMinutes) continue
+
+    const actor = await loadRequestUser(campaign.createdBy || '')
+    const fallbackActor = actor || { username: 'system', email: ADMIN_EMAIL, fullName: 'System scheduler' }
+    await enqueueCampaignRun({ campaign, actorUser: fallbackActor })
+    await upsertEmailCampaignRecord({
+      ...campaign,
+      status: 'scheduled',
+      lastScheduledDateKey: todayKey,
+      updatedBy: fallbackActor.username,
+    })
+    await recordAuditLog({
+      actorUser: fallbackActor,
+      action: 'campaign.daily.enqueue',
+      targetType: 'campaign',
+      targetId: campaign.id || campaign._id,
+      summary: `Queued daily campaign "${campaign.name}"`,
+    })
+  }
+}
+
+async function processEmailQueue() {
+  if (emailQueueRunning) return
+  emailQueueRunning = true
+
+  try {
+    await maybeEnqueueDueDailyCampaigns()
+    const now = Date.now()
+    let jobs = []
+
+    if (useFileStorage) {
+      const data = readData()
+      const admin = ensureAdminStore(data)
+      jobs = admin.emailJobs
+        .filter((entry) => entry.status === 'pending' && Number(entry.nextAttemptAt || 0) <= now)
+        .sort((left, right) => Number(left.createdAt || 0) - Number(right.createdAt || 0))
+        .slice(0, EMAIL_QUEUE_BATCH_SIZE)
+    } else {
+      jobs = await EmailJob.find({ status: 'pending', nextAttemptAt: { $lte: now } })
+        .sort({ createdAt: 1 })
+        .limit(EMAIL_QUEUE_BATCH_SIZE)
+        .lean()
+        .exec()
+    }
+
+    for (const job of jobs) {
+      const jobId = job.id || String(job._id)
+      await updateEmailJobRecord(jobId, { status: 'sending', attemptCount: Number(job.attemptCount || 0) + 1 })
+      const result = await sendTransactionalEmail({
+        to: job.toEmail,
+        subject: job.subject,
+        text: job.bodyText,
+        html: job.bodyHtml,
+        preferredProvider: job.preferredProvider || 'auto',
+      })
+
+      if (result.delivered) {
+        await updateEmailJobRecord(jobId, {
+          status: 'sent',
+          sentAt: Date.now(),
+          lastError: '',
+        })
+      } else {
+        const attemptCount = Number(job.attemptCount || 0) + 1
+        if (attemptCount >= EMAIL_QUEUE_MAX_ATTEMPTS) {
+          await updateEmailJobRecord(jobId, {
+            status: 'failed',
+            lastError: `${result.provider || job.preferredProvider || 'provider'} delivery failed`,
+          })
+        } else {
+          await updateEmailJobRecord(jobId, {
+            status: 'pending',
+            nextAttemptAt: Date.now() + buildRetryDelayMs(attemptCount),
+            lastError: `${result.provider || job.preferredProvider || 'provider'} delivery failed`,
+          })
+        }
+      }
+
+      if (job.runId) {
+        await refreshRunCounts(job.runId)
+      }
+    }
+  } catch (error) {
+    console.error('Email queue failed:', error)
+  } finally {
+    emailQueueRunning = false
+  }
+}
+
+function startEmailQueueScheduler() {
+  if (emailQueueInterval) return
+  emailQueueInterval = setInterval(() => {
+    void processEmailQueue()
+  }, EMAIL_QUEUE_INTERVAL_MS)
+  void processEmailQueue()
 }
 
 app.post('/api/admin/announce/android-release', async (req, res) => {
@@ -1978,6 +3099,7 @@ app.post('/api/login', async (req, res) => {
       writeData(data)
 
       const token = genToken(match.key)
+      await maybeRecordAdminAuthEvent({ ...match.user, username: match.key })
       return res.json({ username: match.key, token, account: buildAccount(match.user) })
     }
 
@@ -2009,6 +3131,7 @@ app.post('/api/login', async (req, res) => {
     await user.save()
 
     const token = genToken(user.username)
+    await maybeRecordAdminAuthEvent(user.toObject())
     return res.json({ username: user.username, token, account: buildAccount(user.toObject()) })
   } catch (error) {
     console.error(error)
@@ -2118,6 +3241,7 @@ app.post('/api/email/verify', async (req, res) => {
       writeData(data)
 
       const token = genToken(match.key)
+      await maybeRecordAdminAuthEvent({ ...match.user, username: match.key }, 'admin.email.verify')
       return res.json({
         ok: true,
         message: 'Email verified. You are now signed in.',
@@ -2146,6 +3270,7 @@ app.post('/api/email/verify', async (req, res) => {
     await user.save()
 
     const token = genToken(user.username)
+    await maybeRecordAdminAuthEvent(user.toObject(), 'admin.email.verify')
     return res.json({
       ok: true,
       message: 'Email verified. You are now signed in.',
@@ -2362,6 +3487,7 @@ app.post('/api/auth/google', async (req, res) => {
       writeData(data)
 
       const token = genToken(username)
+      await maybeRecordAdminAuthEvent({ ...user, username })
       return res.json({ username, token, account: buildAccount(user) })
     }
 
@@ -2387,6 +3513,7 @@ app.post('/api/auth/google', async (req, res) => {
       })
       await user.save()
       const token = genToken(user.username)
+      await maybeRecordAdminAuthEvent(user.toObject())
       return res.json({ username: user.username, token, account: buildAccount(user.toObject()) })
     }
 
@@ -2401,6 +3528,7 @@ app.post('/api/auth/google', async (req, res) => {
     await user.save()
 
     const token = genToken(user.username)
+    await maybeRecordAdminAuthEvent(user.toObject())
     return res.json({ username: user.username, token, account: buildAccount(user.toObject()) })
   } catch (error) {
     console.error(error)
@@ -2486,6 +3614,452 @@ app.get('/api/meta', authMiddleware, async (req, res) => {
     return res.json({ meta: meta ? meta.meta : {} })
   } catch (error) {
     console.error(error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/admin/overview', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const userDirectory = await loadAllUsersWithData()
+    const totalUsers = userDirectory.length
+    const verifiedUsers = userDirectory.filter((entry) => isEmailVerified(entry.user)).length
+    const contactMessages = await listContactMessages({ page: 1, pageSize: 5 })
+    const campaigns = await listEmailCampaigns()
+    const runs = await listEmailCampaignRuns(12)
+    const queue = await listEmailJobs(200)
+
+    return res.json({
+      counts: {
+        totalUsers,
+        verifiedUsers,
+        contactMessages: contactMessages.total,
+        activeDailyCampaigns: campaigns.filter((campaign) => campaign.kind === 'daily' && campaign.status === 'scheduled' && campaign.scheduleEnabled).length,
+        drafts: campaigns.filter((campaign) => campaign.status === 'draft').length,
+        queuePending: queue.filter((job) => job.status === 'pending' || job.status === 'sending').length,
+        queueFailed: queue.filter((job) => job.status === 'failed').length,
+      },
+      recentRuns: runs.slice(0, 6),
+      recentMessages: contactMessages.items.slice(0, 5),
+    })
+  } catch (error) {
+    console.error('Admin overview failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const result = await listAdminUsers({
+      search: req.query?.search,
+      filter: req.query?.filter,
+      sort: req.query?.sort,
+      page: req.query?.page,
+      pageSize: req.query?.pageSize,
+    })
+    return res.json(result)
+  } catch (error) {
+    console.error('Admin users failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/admin/users/export.csv', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const directory = await listAdminUsers({ search: req.query?.search, filter: req.query?.filter, sort: req.query?.sort, page: 1, pageSize: 'all' })
+    const lines = [
+      ['username', 'fullName', 'email', 'created', 'lastLoginAt', 'loginCount', 'emailVerified', 'isAdmin', 'totalPoints', 'recentActiveDays', 'recentFocusMinutes']
+        .join(','),
+      ...directory.items.map((entry) => [
+        `"${String(entry.username || '').replace(/"/g, '""')}"`,
+        `"${String(entry.fullName || '').replace(/"/g, '""')}"`,
+        `"${String(entry.email || '').replace(/"/g, '""')}"`,
+        `"${String(entry.created || '')}"`,
+        `"${String(entry.lastLoginAt || '')}"`,
+        `"${String(entry.loginCount || 0)}"`,
+        `"${String(entry.emailVerified)}"`,
+        `"${String(entry.isAdmin)}"`,
+        `"${String(entry.totalPoints || 0)}"`,
+        `"${String(entry.recentActiveDays || 0)}"`,
+        `"${String(entry.recentFocusMinutes || 0)}"`,
+      ].join(',')),
+    ]
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.user.export',
+      targetType: 'user',
+      targetId: 'csv',
+      summary: 'Exported users CSV',
+    })
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="zenflow-users.csv"')
+    return res.send(lines.join('\n'))
+  } catch (error) {
+    console.error('Admin export failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/admin/users/:username', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const detail = await getAdminUserDetail(req.params.username)
+    if (!detail) return res.status(404).json({ error: 'user not found' })
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.user.view',
+      targetType: 'user',
+      targetId: detail.user.username,
+      summary: `Viewed user ${detail.user.username}`,
+    })
+
+    return res.json(detail)
+  } catch (error) {
+    console.error('Admin user detail failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/admin/messages', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const result = await listContactMessages({
+      search: req.query?.search,
+      page: req.query?.page,
+      pageSize: req.query?.pageSize,
+    })
+    return res.json(result)
+  } catch (error) {
+    console.error('Admin messages failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/messages/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
+  const status = sanitizeSingleLine(req.body?.status, 40)
+  if (!['new', 'replied', 'archived'].includes(status)) {
+    return res.status(400).json({ error: 'invalid status' })
+  }
+
+  try {
+    const updated = await updateContactMessageRecord(req.params.id, {
+      status,
+      repliedAt: status === 'replied' ? Date.now() : null,
+    })
+    if (!updated) return res.status(404).json({ error: 'message not found' })
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.message.update',
+      targetType: 'contact-message',
+      targetId: req.params.id,
+      summary: `Marked contact message as ${status}`,
+    })
+
+    return res.json({ ok: true, message: updated })
+  } catch (error) {
+    console.error('Admin message update failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/admin/templates', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    return res.json({ items: await listEmailTemplates() })
+  } catch (error) {
+    console.error('Admin templates failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/templates', authMiddleware, adminMiddleware, async (req, res) => {
+  const name = sanitizeSingleLine(req.body?.name, 120)
+  const subject = sanitizeSingleLine(req.body?.subject, 220)
+  const body = sanitizeMultiline(req.body?.body, 20000)
+
+  if (!name || !subject || !body) {
+    return res.status(400).json({ error: 'name, subject, and body are required' })
+  }
+
+  try {
+    const saved = await upsertEmailTemplateRecord({
+      id: req.body?.id,
+      name,
+      kind: sanitizeSingleLine(req.body?.kind, 40) || 'general',
+      subject,
+      body,
+      createdBy: req.adminUser.username,
+      updatedBy: req.adminUser.username,
+      createdAt: req.body?.createdAt,
+    })
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: req.body?.id ? 'admin.template.update' : 'admin.template.create',
+      targetType: 'email-template',
+      targetId: saved.id || saved._id,
+      summary: `Saved email template "${saved.name}"`,
+    })
+
+    return res.json({ ok: true, item: saved })
+  } catch (error) {
+    console.error('Admin template save failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/admin/campaigns', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    return res.json({ items: await listEmailCampaigns() })
+  } catch (error) {
+    console.error('Admin campaigns failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/campaigns', authMiddleware, adminMiddleware, async (req, res) => {
+  const name = sanitizeSingleLine(req.body?.name, 140)
+  const subject = sanitizeSingleLine(req.body?.subject, 220)
+  const body = sanitizeMultiline(req.body?.body, 20000)
+  const targetMode = sanitizeSingleLine(req.body?.targetMode, 40) || 'selected'
+
+  if (!name || !subject || !body) {
+    return res.status(400).json({ error: 'name, subject, and body are required' })
+  }
+
+  if (!['one_off', 'daily', 'thank_you'].includes(sanitizeSingleLine(req.body?.kind, 40) || 'one_off')) {
+    return res.status(400).json({ error: 'invalid campaign kind' })
+  }
+
+  if (!['one', 'selected', 'all'].includes(targetMode)) {
+    return res.status(400).json({ error: 'invalid target mode' })
+  }
+
+  try {
+    const saved = await upsertEmailCampaignRecord({
+      id: req.body?.id,
+      name,
+      kind: sanitizeSingleLine(req.body?.kind, 40) || 'one_off',
+      targetMode,
+      selectedRecipients: req.body?.selectedRecipients,
+      subject,
+      body,
+      templateId: req.body?.templateId,
+      status: sanitizeSingleLine(req.body?.status, 40) || 'draft',
+      preferredProvider: sanitizeSingleLine(req.body?.preferredProvider, 20) || 'auto',
+      scheduleEnabled: req.body?.scheduleEnabled,
+      scheduleHourUtc: req.body?.scheduleHourUtc,
+      scheduleMinuteUtc: req.body?.scheduleMinuteUtc,
+      lastScheduledDateKey: req.body?.lastScheduledDateKey,
+      createdBy: req.adminUser.username,
+      updatedBy: req.adminUser.username,
+      createdAt: req.body?.createdAt,
+    })
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: req.body?.id ? 'admin.campaign.update' : 'admin.campaign.create',
+      targetType: 'campaign',
+      targetId: saved.id || saved._id,
+      summary: `Saved campaign "${saved.name}"`,
+    })
+
+    return res.json({ ok: true, item: saved })
+  } catch (error) {
+    console.error('Admin campaign save failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/campaigns/preview', authMiddleware, adminMiddleware, async (req, res) => {
+  const subject = sanitizeSingleLine(req.body?.subject, 220)
+  const body = sanitizeMultiline(req.body?.body, 20000)
+  if (!subject || !body) return res.status(400).json({ error: 'subject and body are required' })
+
+  try {
+    const users = await loadAllUsersWithData()
+    const previewUser = users[0]?.user || req.adminUser
+    return res.json({
+      preview: buildRenderedEmailContent({
+        subject,
+        body,
+        user: previewUser,
+      }),
+    })
+  } catch (error) {
+    console.error('Admin campaign preview failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/campaigns/:id/duplicate', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const duplicate = await duplicateEmailCampaignRecord(req.params.id, req.adminUser.username)
+    if (!duplicate) return res.status(404).json({ error: 'campaign not found' })
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.campaign.duplicate',
+      targetType: 'campaign',
+      targetId: req.params.id,
+      summary: `Duplicated campaign "${duplicate.name}"`,
+    })
+
+    return res.json({ ok: true, item: duplicate })
+  } catch (error) {
+    console.error('Admin campaign duplicate failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/campaigns/:id/queue', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const campaign = await getEmailCampaignRecord(req.params.id)
+    if (!campaign) return res.status(404).json({ error: 'campaign not found' })
+
+    const run = await enqueueCampaignRun({ campaign, actorUser: req.adminUser })
+    await upsertEmailCampaignRecord({
+      ...campaign,
+      status: campaign.kind === 'daily' && campaign.scheduleEnabled ? 'scheduled' : 'queued',
+      updatedBy: req.adminUser.username,
+    })
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.campaign.queue',
+      targetType: 'campaign',
+      targetId: req.params.id,
+      summary: `Queued campaign "${campaign.name}"`,
+    })
+
+    return res.json({ ok: true, run })
+  } catch (error) {
+    console.error('Admin campaign queue failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/campaigns/:id/test', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const campaign = await getEmailCampaignRecord(req.params.id)
+    if (!campaign) return res.status(404).json({ error: 'campaign not found' })
+
+    const run = await enqueueCampaignRun({
+      campaign,
+      actorUser: req.adminUser,
+      testEmail: ADMIN_EMAIL,
+    })
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.campaign.test',
+      targetType: 'campaign',
+      targetId: req.params.id,
+      summary: `Queued test email for "${campaign.name}"`,
+    })
+
+    return res.json({ ok: true, run })
+  } catch (error) {
+    console.error('Admin campaign test failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/campaigns/:id/pause', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const campaign = await getEmailCampaignRecord(req.params.id)
+    if (!campaign) return res.status(404).json({ error: 'campaign not found' })
+    const updated = await upsertEmailCampaignRecord({
+      ...campaign,
+      status: 'paused',
+      scheduleEnabled: false,
+      updatedBy: req.adminUser.username,
+    })
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.campaign.pause',
+      targetType: 'campaign',
+      targetId: req.params.id,
+      summary: `Paused campaign "${campaign.name}"`,
+    })
+
+    return res.json({ ok: true, item: updated })
+  } catch (error) {
+    console.error('Admin campaign pause failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/campaigns/:id/resume', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const campaign = await getEmailCampaignRecord(req.params.id)
+    if (!campaign) return res.status(404).json({ error: 'campaign not found' })
+    const updated = await upsertEmailCampaignRecord({
+      ...campaign,
+      status: campaign.kind === 'daily' ? 'scheduled' : 'draft',
+      scheduleEnabled: campaign.kind === 'daily' ? true : campaign.scheduleEnabled,
+      updatedBy: req.adminUser.username,
+    })
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.campaign.resume',
+      targetType: 'campaign',
+      targetId: req.params.id,
+      summary: `Resumed campaign "${campaign.name}"`,
+    })
+
+    return res.json({ ok: true, item: updated })
+  } catch (error) {
+    console.error('Admin campaign resume failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/admin/runs', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    return res.json({ items: await listEmailCampaignRuns(req.query?.limit) })
+  } catch (error) {
+    console.error('Admin runs failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/admin/queue', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const jobs = await listEmailJobs(req.query?.limit || 200)
+    return res.json({
+      items: jobs,
+      counts: {
+        pending: jobs.filter((entry) => entry.status === 'pending' || entry.status === 'sending').length,
+        sent: jobs.filter((entry) => entry.status === 'sent').length,
+        failed: jobs.filter((entry) => entry.status === 'failed').length,
+      },
+      config: {
+        batchSize: EMAIL_QUEUE_BATCH_SIZE,
+        intervalMs: EMAIL_QUEUE_INTERVAL_MS,
+        maxAttempts: EMAIL_QUEUE_MAX_ATTEMPTS,
+      },
+    })
+  } catch (error) {
+    console.error('Admin queue failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.get('/api/admin/audit-logs', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    if (useFileStorage) {
+      const data = readData()
+      const admin = ensureAdminStore(data)
+      return res.json({ items: admin.auditLogs.slice(0, 100) })
+    }
+
+    const items = await AuditLog.find({}).sort({ createdAt: -1 }).limit(100).lean().exec()
+    return res.json({ items })
+  } catch (error) {
+    console.error('Admin audit logs failed:', error)
     return res.status(500).json({ error: 'server error' })
   }
 })

@@ -9,6 +9,7 @@ import BrainArcade from './components/BrainArcade'
 import MarketingLanding from './components/MarketingLanding'
 import BreakRoom from './components/BreakRoom'
 import CoachPanel, { type CoachResource } from './components/CoachPanel'
+import AdminDashboard from './components/AdminDashboard'
 import { BlogIndexPage, BlogArticlePage, BlogPreviewSection, blogPageMeta, isBlogArticleId, type BlogArticleId } from './components/BlogPages'
 import type { AuthAccount, StoredSession } from './types/auth'
 import type { GoalIntent } from './types/experience'
@@ -206,6 +207,7 @@ function resolveTrackedPage(selected: string | null, activePublicPage: PublicPag
       breakroom: { name: 'Break Room', path: '/app/break-room', kind: 'tool' },
       planner: { name: 'Planner', path: '/app/planner', kind: 'dashboard' },
       profile: { name: 'Account', path: '/app/account', kind: 'dashboard' },
+      admin: { name: 'Admin', path: '/app/admin', kind: 'dashboard' },
     }
     const tracked = viewMap[selected]
     if (tracked) {
@@ -282,6 +284,7 @@ export default function App() {
     ...(BREAK_ROOM_ENABLED ? [{ id: 'breakroom', label: 'Break Room' }] : []),
     { id: 'planner', label: 'Planner' },
     { id: 'profile', label: 'Account' },
+    ...(account?.isAdmin ? [{ id: 'admin', label: 'Admin' }] : []),
   ]
   const visibleDesktopNav = desktopNavItems.filter((item) => item.label.toLowerCase().includes(navSearch.trim().toLowerCase()))
   const blogRouteActive = activePublicPage?.kind === 'blogIndex' || activePublicPage?.kind === 'blogArticle'
@@ -550,6 +553,7 @@ export default function App() {
     breakroom: 'Break Room — Zenflow',
     planner: 'Planner — Zenflow',
     profile: 'Account — Zenflow',
+    admin: 'Admin — Zenflow',
   }
 
   useEffect(() => {
@@ -814,6 +818,7 @@ export default function App() {
                 <strong>{account.fullName}</strong>
                 <span className="muted">@{account.username}</span>
               </div>
+              {account.isAdmin && <button className="login-btn" onClick={() => setView('admin')}>Admin</button>}
               <button className="login-btn" onClick={() => setView('profile')}>Account</button>
               {confirmLogout ? (
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -1010,6 +1015,14 @@ export default function App() {
                 onMetaSaved={() => setProfileRefreshKey((value) => value + 1)}
               />
             )}
+            {selected === 'admin' && (
+              <AdminDashboard
+                account={account}
+                token={token}
+                onClose={() => setView(null)}
+                onNotify={showToast}
+              />
+            )}
           </section>
         )}
       </main>
@@ -1057,7 +1070,7 @@ export default function App() {
         <button className={`bottom-nav-item ${selected === 'planner' ? 'active' : ''}`} onClick={() => handleBottomNav('activity')}>
           <span>Activity</span>
         </button>
-        <button className={`bottom-nav-item ${selected === 'profile' ? 'active' : ''}`} onClick={() => handleBottomNav('profile')}>
+        <button className={`bottom-nav-item ${selected === 'profile' || selected === 'admin' ? 'active' : ''}`} onClick={() => handleBottomNav('profile')}>
           <span>Profile</span>
         </button>
       </nav>
