@@ -3,6 +3,23 @@ import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/loc
 
 export type RequiredPlannerTaskKey = 'water' | 'exercise' | 'meditation'
 export type PlannerRepeat = 'once' | 'daily'
+export const plannerDaySectionIds = [
+  'important',
+  'breakfast',
+  'lunch',
+  'dinner',
+  'snacks',
+  'todo',
+  'chores',
+  'morning',
+  'evening',
+  'todayGoals',
+  'tomorrowGoals',
+  'notes',
+] as const
+
+export type PlannerDaySectionId = (typeof plannerDaySectionIds)[number]
+export type PlannerWeatherKey = 'sunny' | 'cloudy' | 'rainy' | 'stormy'
 
 export type PlannerCustomItem = {
   id: string
@@ -12,11 +29,30 @@ export type PlannerCustomItem = {
   repeat?: PlannerRepeat
 }
 
+export type PlannerDaySheetItem = {
+  id: string
+  text: string
+  checked?: boolean
+}
+
+export type PlannerDaySheet = {
+  sections?: Partial<Record<PlannerDaySectionId, PlannerDaySheetItem[]>>
+  weather?: PlannerWeatherKey
+  waterIntake?: number
+}
+
+export type PlannerDaySheetState = {
+  sections: Record<PlannerDaySectionId, PlannerDaySheetItem[]>
+  weather: PlannerWeatherKey | null
+  waterIntake: number
+}
+
 export type PlannerMeta = {
   remindersEnabled?: boolean
   reminderTimes?: Partial<Record<RequiredPlannerTaskKey, string>>
   customItems?: PlannerCustomItem[]
   completions?: Record<string, Record<string, boolean>>
+  daySheets?: Record<string, PlannerDaySheet>
 }
 
 export type PlannerEntry = {
@@ -76,11 +112,83 @@ function plannerNotificationId(input: string) {
   return Math.abs(hash) % 2000000000
 }
 
+function clampWaterIntake(value: number) {
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, Math.min(8, Math.round(value)))
+}
+
+function clonePlannerBase(planner: PlannerMeta | undefined): PlannerMeta {
+  return {
+    ...(planner || {}),
+    remindersEnabled: planner?.remindersEnabled ?? true,
+    reminderTimes: getReminderTimes(planner),
+    customItems: [...(planner?.customItems || [])],
+    completions: { ...(planner?.completions || {}) },
+    daySheets: { ...(planner?.daySheets || {}) },
+  }
+}
+
+function cloneDaySheet(sheet: PlannerDaySheet | undefined): PlannerDaySheetState {
+  return {
+    sections: Object.fromEntries(
+      plannerDaySectionIds.map((sectionId) => [
+        sectionId,
+        (sheet?.sections?.[sectionId] || [])
+          .filter((item) => item && typeof item.text === 'string')
+          .map((item) => ({
+            id: String(item.id || `${sectionId}-${Date.now()}`),
+            text: item.text.trim(),
+            checked: Boolean(item.checked),
+          }))
+          .filter((item) => item.text),
+      ])
+    ) as Record<PlannerDaySectionId, PlannerDaySheetItem[]>,
+    weather: sheet?.weather || null,
+    waterIntake: clampWaterIntake(sheet?.waterIntake ?? 0),
+  }
+}
+
+function isDaySheetEmpty(sheet: PlannerDaySheetState) {
+  return !sheet.weather
+    && sheet.waterIntake === 0
+    && plannerDaySectionIds.every((sectionId) => sheet.sections[sectionId].length === 0)
+}
+
+function withUpdatedDaySheet(
+  planner: PlannerMeta | undefined,
+  dateKey: string,
+  updater: (sheet: PlannerDaySheetState) => void
+) {
+  const nextPlanner = clonePlannerBase(planner)
+  const nextSheet = cloneDaySheet(nextPlanner.daySheets?.[dateKey])
+  updater(nextSheet)
+
+  if (isDaySheetEmpty(nextSheet)) {
+    delete nextPlanner.daySheets?.[dateKey]
+    return nextPlanner
+  }
+
+  nextPlanner.daySheets = {
+    ...(nextPlanner.daySheets || {}),
+    [dateKey]: {
+      sections: nextSheet.sections,
+      weather: nextSheet.weather || undefined,
+      waterIntake: nextSheet.waterIntake,
+    },
+  }
+
+  return nextPlanner
+}
+
 export function getReminderTimes(planner: PlannerMeta | undefined) {
   return {
     ...defaultReminderTimes,
     ...(planner?.reminderTimes || {}),
   }
+}
+
+export function getPlannerDaySheet(dateKey: string, planner: PlannerMeta | undefined): PlannerDaySheetState {
+  return cloneDaySheet(planner?.daySheets?.[dateKey])
 }
 
 export function formatPlannerDate(dateKey: string) {
@@ -130,58 +238,99 @@ export function getPlannerEntries(dateKey: string, planner: PlannerMeta | undefi
 }
 
 export function updatePlannerCompletion(planner: PlannerMeta | undefined, dateKey: string, taskId: string, completed: boolean): PlannerMeta {
+  const nextPlanner = clonePlannerBase(planner)
   const nextCompletions = {
-    ...(planner?.completions || {}),
+    ...(nextPlanner.completions || {}),
     [dateKey]: {
-      ...((planner?.completions || {})[dateKey] || {}),
+      ...((nextPlanner.completions || {})[dateKey] || {}),
       [taskId]: completed,
     },
   }
 
   return {
-    ...(planner || {}),
-    reminderTimes: getReminderTimes(planner),
-    customItems: [...(planner?.customItems || [])],
+    ...nextPlanner,
     completions: nextCompletions,
-    remindersEnabled: planner?.remindersEnabled ?? true,
   }
 }
 
 export function addPlannerItem(planner: PlannerMeta | undefined, item: PlannerCustomItem): PlannerMeta {
+  const nextPlanner = clonePlannerBase(planner)
   return {
-    ...(planner || {}),
-    reminderTimes: getReminderTimes(planner),
-    customItems: [...(planner?.customItems || []), { ...item, repeat: item.repeat || 'once' }].sort((left, right) => `${left.date}-${left.time}`.localeCompare(`${right.date}-${right.time}`)),
-    completions: { ...(planner?.completions || {}) },
-    remindersEnabled: planner?.remindersEnabled ?? true,
+    ...nextPlanner,
+    customItems: [...(nextPlanner.customItems || []), { ...item, repeat: item.repeat || 'once' }].sort((left, right) => `${left.date}-${left.time}`.localeCompare(`${right.date}-${right.time}`)),
   }
 }
 
 export function removePlannerItem(planner: PlannerMeta | undefined, itemId: string): PlannerMeta {
+  const nextPlanner = clonePlannerBase(planner)
   const nextCompletions = Object.fromEntries(
-    Object.entries(planner?.completions || {}).map(([dateKey, entries]) => [
+    Object.entries(nextPlanner.completions || {}).map(([dateKey, entries]) => [
       dateKey,
       Object.fromEntries(Object.entries(entries).filter(([entryId]) => entryId !== itemId)),
     ])
   )
 
   return {
-    ...(planner || {}),
-    reminderTimes: getReminderTimes(planner),
-    customItems: (planner?.customItems || []).filter((item) => item.id !== itemId),
+    ...nextPlanner,
+    customItems: (nextPlanner.customItems || []).filter((item) => item.id !== itemId),
     completions: nextCompletions,
-    remindersEnabled: planner?.remindersEnabled ?? true,
   }
 }
 
 export function movePlannerItem(planner: PlannerMeta | undefined, itemId: string, nextDate: string): PlannerMeta {
+  const nextPlanner = clonePlannerBase(planner)
   return {
-    ...(planner || {}),
-    reminderTimes: getReminderTimes(planner),
-    customItems: (planner?.customItems || []).map((item) => (item.id === itemId ? { ...item, date: nextDate } : item)),
-    completions: { ...(planner?.completions || {}) },
-    remindersEnabled: planner?.remindersEnabled ?? true,
+    ...nextPlanner,
+    customItems: (nextPlanner.customItems || []).map((item) => (item.id === itemId ? { ...item, date: nextDate } : item)),
   }
+}
+
+export function addPlannerDaySheetItem(
+  planner: PlannerMeta | undefined,
+  dateKey: string,
+  sectionId: PlannerDaySectionId,
+  item: PlannerDaySheetItem
+) {
+  return withUpdatedDaySheet(planner, dateKey, (sheet) => {
+    sheet.sections[sectionId] = [...sheet.sections[sectionId], { ...item, text: item.text.trim() }].filter((entry) => entry.text)
+  })
+}
+
+export function updatePlannerDaySheetItem(
+  planner: PlannerMeta | undefined,
+  dateKey: string,
+  sectionId: PlannerDaySectionId,
+  itemId: string,
+  patch: Partial<PlannerDaySheetItem>
+) {
+  return withUpdatedDaySheet(planner, dateKey, (sheet) => {
+    sheet.sections[sectionId] = sheet.sections[sectionId]
+      .map((item) => (item.id === itemId ? { ...item, ...patch, text: String((patch.text ?? item.text) || '').trim() } : item))
+      .filter((item) => item.text)
+  })
+}
+
+export function removePlannerDaySheetItem(
+  planner: PlannerMeta | undefined,
+  dateKey: string,
+  sectionId: PlannerDaySectionId,
+  itemId: string
+) {
+  return withUpdatedDaySheet(planner, dateKey, (sheet) => {
+    sheet.sections[sectionId] = sheet.sections[sectionId].filter((item) => item.id !== itemId)
+  })
+}
+
+export function setPlannerDaySheetWaterIntake(planner: PlannerMeta | undefined, dateKey: string, waterIntake: number) {
+  return withUpdatedDaySheet(planner, dateKey, (sheet) => {
+    sheet.waterIntake = clampWaterIntake(waterIntake)
+  })
+}
+
+export function setPlannerDaySheetWeather(planner: PlannerMeta | undefined, dateKey: string, weather: PlannerWeatherKey | null) {
+  return withUpdatedDaySheet(planner, dateKey, (sheet) => {
+    sheet.weather = weather
+  })
 }
 
 export async function schedulePlannerNotifications(planner: PlannerMeta | undefined, referenceDate = new Date()) {
