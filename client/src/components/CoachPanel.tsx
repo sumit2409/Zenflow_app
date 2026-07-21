@@ -115,7 +115,7 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
                 <span className="coach-cat-face" />
               </div>
               <div>
-                <div className="section-kicker">Zenflow Cat Coach</div>
+                <div className="section-kicker">Zenflow Coach</div>
                 <h3>Ask about your progress, next step, or plan.</h3>
                 <p className="coach-subline">I use your recent Zenflow activity to answer more personally.</p>
               </div>
@@ -200,7 +200,7 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
           <span className="coach-cat-face" />
         </span>
         <span className="coach-launcher-copy">
-          <span className="coach-launcher-badge">Cat Coach</span>
+          <span className="coach-launcher-badge">Coach</span>
           <strong>Ask Zenflow</strong>
         </span>
       </button>

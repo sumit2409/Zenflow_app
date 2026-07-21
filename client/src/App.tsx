@@ -272,8 +272,11 @@ export default function App() {
   const previousAccountRef = useRef<AuthAccount | null>(initialSession?.account || null)
 
   const user = account?.username || null
-  const guestLandingMode = !account && !selected
   const toolViews = ['pomodoro', 'meditation', 'sudoku', 'arcade', 'breakroom'] as const
+  const publicToolViews = ['pomodoro', 'meditation'] as const
+  const isPublicToolSelected = Boolean(selected && publicToolViews.includes(selected as (typeof publicToolViews)[number]))
+  const guestLandingMode = !account && !selected
+  const publicShellMode = !account && (!selected || isPublicToolSelected)
   const isToolSelected = Boolean(selected && toolViews.includes(selected as (typeof toolViews)[number]))
   const desktopNavItems: Array<{ id: string | null; label: string }> = [
     { id: null, label: 'Dashboard' },
@@ -283,7 +286,6 @@ export default function App() {
     { id: 'arcade', label: 'Games' },
     ...(BREAK_ROOM_ENABLED ? [{ id: 'breakroom', label: 'Break Room' }] : []),
     { id: 'planner', label: 'Planner' },
-    { id: 'profile', label: 'Account' },
     ...(account?.isAdmin ? [{ id: 'admin', label: 'Admin' }] : []),
   ]
   const visibleDesktopNav = desktopNavItems.filter((item) => item.label.toLowerCase().includes(navSearch.trim().toLowerCase()))
@@ -536,6 +538,10 @@ export default function App() {
     if (activePublicPage) {
       clearPublicRoute()
     }
+    if (!account && view && !publicToolViews.includes(view as (typeof publicToolViews)[number])) {
+      openAuth('login')
+      return
+    }
     setSelected(view)
   }
 
@@ -636,7 +642,7 @@ export default function App() {
     }
     if (section === 'tools') {
       if (!account) {
-        openAuth('login', 'focus')
+        setSelected(publicToolViews.includes(lastToolView as (typeof publicToolViews)[number]) ? lastToolView : 'pomodoro')
         return
       }
       setSelected(lastToolView)
@@ -745,7 +751,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-root">
+    <div className={`app-root ${publicShellMode ? 'public-root' : ''}`}>
       <button
         type="button"
         className={`penguin-mascot ${penguinHopping ? 'is-hopping' : ''} ${penguinKissing ? 'is-kissing' : ''}`}
@@ -772,7 +778,7 @@ export default function App() {
           <div className="penguin-heart penguin-heart-right" aria-hidden="true">&#10084;</div>
         </div>
       </button>
-      <header className={`app-header fade-rise ${guestLandingMode ? 'guest-header' : ''}`}>
+      <header className={`app-header fade-rise ${publicShellMode ? 'guest-header' : ''}`}>
         <div className="brand-wrap">
           <div className="brand-dot" aria-hidden />
           <div>
@@ -794,6 +800,8 @@ export default function App() {
           ) : (
             <>
               <a className="nav-link" href={`${landingSectionPrefix}#start`}>Home</a>
+              <button type="button" className={`nav-link ${selected === 'pomodoro' ? 'active' : ''}`} onClick={() => setView('pomodoro')}>Focus</button>
+              <button type="button" className={`nav-link ${selected === 'meditation' ? 'active' : ''}`} onClick={() => setView('meditation')}>Meditate</button>
               <a className="nav-link" href={`${landingSectionPrefix}#plans`}>Features</a>
               <a className="nav-link" href={`${landingSectionPrefix}#overview`}>Overview</a>
               <button type="button" className={`nav-link ${blogRouteActive ? 'active' : ''}`} onClick={openBlogIndex}>Blog</button>
@@ -811,7 +819,7 @@ export default function App() {
             />
           </label>
         )}
-        <div className={`auth ${guestLandingMode ? 'guest-auth' : ''}`}>
+        <div className={`auth ${publicShellMode ? 'guest-auth' : ''}`}>
           {account ? (
             <>
               <div className="auth-summary account-summary">
@@ -929,7 +937,7 @@ export default function App() {
               </>
             ) : (
               <>
-                <MarketingLanding onOpenAuth={openAuth} />
+                <MarketingLanding onOpenAuth={openAuth} onOpenTool={setView} />
                 <BlogPreviewSection onOpenIndex={openBlogIndex} onOpenArticle={openBlogArticle} />
               </>
             )}
@@ -944,7 +952,7 @@ export default function App() {
         ) : (
           <section className="focus-card fade-rise">
             <button className="back tool-back-btn" onClick={() => setView(null)}>
-              &larr; Back to dashboard
+              &larr; Back to {account ? 'dashboard' : 'home'}
             </button>
             {isToolSelected && (
               <div className="tool-switcher" aria-label="Tool switcher">

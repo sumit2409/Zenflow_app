@@ -3,6 +3,7 @@ import type { GoalIntent } from '../types/experience'
 
 type Props = {
   onOpenAuth: (mode: 'login' | 'register', goal?: GoalIntent) => void
+  onOpenTool: (view: 'pomodoro' | 'meditation') => void
 }
 
 const goalOptions: Array<{
@@ -67,7 +68,7 @@ const faqs = [
   },
 ]
 
-export default function MarketingLanding({ onOpenAuth }: Props) {
+export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
   const [selectedGoal, setSelectedGoal] = useState<GoalIntent>('focus')
   const androidAppUrl = 'https://raw.githubusercontent.com/sumit2409/Zenflow_app/main/downloads/zenflow-app.apk'
   const selectedPlan = useMemo(
@@ -82,7 +83,7 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
     <div className="landing-shell">
       <a className="marketing-skip-link" href="#main-content">Skip to main content</a>
       <section id="start" className="welcome-stage fade-rise">
-        <div className="welcome-copy card">
+        <div className="welcome-copy">
           <div className="eyebrow">Get started</div>
           <h1>Pick a goal and start with the right tools.</h1>
           <p className="lead">
@@ -103,66 +104,115 @@ export default function MarketingLanding({ onOpenAuth }: Props) {
           </nav>
           <div className="hero-actions">
             <button className="primary-cta" onClick={() => onOpenAuth('register', selectedPlan.id)}>Create account</button>
+            <button className="ghost-btn" onClick={() => onOpenTool('pomodoro')}>Try Focus Timer</button>
+            <button className="ghost-btn" onClick={() => onOpenTool('meditation')}>Try Meditation</button>
             <button className="ghost-btn" onClick={() => onOpenAuth('login', selectedPlan.id)}>I already have an account</button>
-          </div>
-          <div className="landing-metrics">
-            <div>
-              <strong>4 tools</strong>
-              <span>focus, meditation, sudoku, and games</span>
-            </div>
-            <div>
-              <strong>1 account</strong>
-              <span>stores your profile, notes, and progress</span>
-            </div>
-            <div>
-              <strong>{selectedPlan.timeline}</strong>
-              <span>to get through the first session</span>
-            </div>
           </div>
         </div>
 
-        <aside className="concierge-card card">
-          <div className="section-kicker">Choose a starting point</div>
-          <div className="chat-thread" aria-live="polite">
-            <div className="chat-bubble bot">
-              What do you want to improve first?
+        <div className="landing-showcase">
+          <div className="workspace-preview" aria-label="Zenflow workspace preview">
+            <div className="workspace-titlebar">
+              <div className="window-controls" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+              <strong>Zenflow workspace</strong>
+              <span>Today</span>
             </div>
-            {goalOptions.map((goal) => (
-              <button
-                key={goal.id}
-                type="button"
-                className={`goal-chip ${goal.id === selectedPlan.id ? 'active' : ''}`}
-                onClick={() => setSelectedGoal(goal.id)}
-              >
-                {goal.label}
-              </button>
-            ))}
-            <div className="chat-bubble user">
-              {selectedPlan.prompt}
-            </div>
-            <div className="chat-bubble bot accent">
-              {selectedPlan.reply}
+            <div className="workspace-body">
+              <div className="workspace-sidebar" aria-hidden="true">
+                <span className="active">Dashboard</span>
+                <span>Focus Timer</span>
+                <span>Meditation</span>
+                <span>Sudoku</span>
+                <span>Games</span>
+              </div>
+              <div className="workspace-main">
+                <div className="workspace-panel focus-panel">
+                  <span className="panel-kicker">Focus Timer</span>
+                  <strong>25:00</strong>
+                  <div className="focus-progress" aria-hidden="true">
+                    <span />
+                  </div>
+                </div>
+                <div className="workspace-panel">
+                  <span className="panel-kicker">Tasks</span>
+                  <p>Daily Note</p>
+                  <p>One Daily Session</p>
+                </div>
+                <div className="workspace-panel calm-panel">
+                  <span className="panel-kicker">Meditation</span>
+                  <strong>8 min</strong>
+                </div>
+                <div className="workspace-panel game-panel">
+                  <span className="panel-kicker">Sudoku</span>
+                  <strong>Level up</strong>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="concierge-plan">
-            <strong>{selectedPlan.route}</strong>
-            <div className="plan-tags">
-              {selectedPlan.rooms.map((room) => (
-                <span key={room}>{room}</span>
+          <aside className="concierge-card">
+            <div className="section-kicker">Choose a starting point</div>
+            <div className="chat-thread" aria-live="polite">
+              <div className="chat-bubble bot">
+                What do you want to improve first?
+              </div>
+              {goalOptions.map((goal) => (
+                <button
+                  key={goal.id}
+                  type="button"
+                  className={`goal-chip ${goal.id === selectedPlan.id ? 'active' : ''}`}
+                  onClick={() => setSelectedGoal(goal.id)}
+                >
+                  {goal.label}
+                </button>
               ))}
+              <div className="chat-bubble user">
+                {selectedPlan.prompt}
+              </div>
+              <div className="chat-bubble bot accent">
+                {selectedPlan.reply}
+              </div>
             </div>
-            <button className="primary-cta" onClick={() => onOpenAuth('register', selectedPlan.id)}>
-              Use this setup
-            </button>
+
+            <div className="concierge-plan">
+              <strong>{selectedPlan.route}</strong>
+              <div className="plan-tags">
+                {selectedPlan.rooms.map((room) => (
+                  <span key={room}>{room}</span>
+                ))}
+              </div>
+              <button className="primary-cta" onClick={() => onOpenAuth('register', selectedPlan.id)}>
+                Use this setup
+              </button>
+            </div>
+          </aside>
+        </div>
+
+        <div className="landing-metrics">
+          <div>
+            <strong>4 tools</strong>
+            <span>focus, meditation, sudoku, and games</span>
           </div>
-        </aside>
+          <div>
+            <strong>1 account</strong>
+            <span>stores your profile, notes, and progress</span>
+          </div>
+          <div>
+            <strong>{selectedPlan.timeline}</strong>
+            <span>to get through the first session</span>
+          </div>
+        </div>
       </section>
 
       <section id="plans" className="experience-grid fade-rise">
-        {goalOptions.map((goal) => (
+        {goalOptions.map((goal, index) => (
           <article key={goal.id} className={`experience-card card ${goal.id === selectedPlan.id ? 'highlight' : ''}`}>
             <div className="section-kicker">Recommended path</div>
+            <span className="experience-number">0{index + 1}</span>
             <h3>{goal.label}</h3>
             <p>{goal.route}</p>
             <div className="plan-tags">

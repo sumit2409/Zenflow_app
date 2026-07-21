@@ -16,6 +16,7 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
   const [running, setRunning] = useState(false)
   const [showMoodRating, setShowMoodRating] = useState(false)
   const [sessionMinutes, setSessionMinutes] = useState(0)
+  const [completionNote, setCompletionNote] = useState('')
 
   const [breathPattern, setBreathPattern] = useState<BreathPattern>('none')
   const [breathPhase, setBreathPhase] = useState<BreathPhase>('inhale')
@@ -104,6 +105,7 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
     void playMeditationBell()
 
     setSessionMinutes(currentPreset.current / 60)
+    setCompletionNote(user && token ? '' : 'Session complete. Create an account when you want to save meditation history and mood check-ins.')
     setShowMoodRating(true)
   }, [seconds])
 
@@ -131,7 +133,7 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
 
       await Promise.all(calls).catch((error) => console.error(error))
     } else {
-      onRequireLogin?.()
+      setCompletionNote('Nice reset. Sign in any time to save meditation minutes and mood history.')
     }
   }
 
@@ -193,6 +195,7 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
         </button>
       </div>
       <p className="muted">The meditation timer uses a softer bell at completion while the ambient tone is active.</p>
+      {completionNote && <p className="muted">{completionNote}</p>}
 
       {breathPattern !== 'none' && running ? (
         <div className="breath-guide">

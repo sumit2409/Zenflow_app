@@ -252,7 +252,7 @@ export default function PomodoroTimer({ user, token, initialTaskId, onRequireLog
           }
           onSessionComplete?.(workMinutes)
         } else {
-          onRequireLogin?.()
+          setStatusNote('Session complete. Create an account when you want to save focus history and task progress.')
         }
 
         setShowReflection(true)
@@ -317,7 +317,7 @@ export default function PomodoroTimer({ user, token, initialTaskId, onRequireLog
   }
 
   return (
-    <div>
+    <div className="pomodoro-module">
       <div className="module-meta">
         <h2>Deep Focus Cycle</h2>
         <p>Each task can require one or more focus sessions. Every work block rolls into a break before the next session begins.</p>
