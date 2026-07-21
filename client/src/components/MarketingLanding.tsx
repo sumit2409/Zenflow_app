@@ -75,6 +75,27 @@ export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
     () => goalOptions.find((goal) => goal.id === selectedGoal) || goalOptions[0],
     [selectedGoal],
   )
+  const getPlanAction = (goal: (typeof goalOptions)[number]) => {
+    if (goal.id === 'focus') {
+      return {
+        label: 'Try Focus Timer',
+        action: () => onOpenTool('pomodoro'),
+      }
+    }
+
+    if (goal.id === 'calm') {
+      return {
+        label: 'Try Meditation',
+        action: () => onOpenTool('meditation'),
+      }
+    }
+
+    return {
+      label: 'Create account',
+      action: () => onOpenAuth('register', goal.id),
+    }
+  }
+
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -209,19 +230,25 @@ export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
       </section>
 
       <section id="plans" className="experience-grid fade-rise">
-        {goalOptions.map((goal, index) => (
-          <article key={goal.id} className={`experience-card card ${goal.id === selectedPlan.id ? 'highlight' : ''}`}>
-            <div className="section-kicker">Recommended path</div>
-            <span className="experience-number">0{index + 1}</span>
-            <h3>{goal.label}</h3>
-            <p>{goal.route}</p>
-            <div className="plan-tags">
-              {goal.rooms.map((room) => (
-                <span key={room}>{room}</span>
-              ))}
-            </div>
-          </article>
-        ))}
+        {goalOptions.map((goal, index) => {
+          const planAction = getPlanAction(goal)
+          return (
+            <article key={goal.id} className={`experience-card card ${goal.id === selectedPlan.id ? 'highlight' : ''}`}>
+              <div className="section-kicker">Recommended path</div>
+              <span className="experience-number">0{index + 1}</span>
+              <h3>{goal.label}</h3>
+              <p>{goal.route}</p>
+              <div className="plan-tags">
+                {goal.rooms.map((room) => (
+                  <span key={room}>{room}</span>
+                ))}
+              </div>
+              <button type="button" className="ghost-btn plan-action-btn" onClick={planAction.action}>
+                {planAction.label}
+              </button>
+            </article>
+          )
+        })}
       </section>
 
       <section id="main-content" className="faq-grid fade-rise">

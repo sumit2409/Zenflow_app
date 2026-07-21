@@ -191,6 +191,23 @@ small {
   min-width: 0;
 }
 
+.brand-home {
+  min-height: unset;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.brand-home:hover {
+  transform: none;
+  border-color: transparent;
+  background: #f4f3f0;
+  box-shadow: none;
+}
+
 .brand-dot {
   width: 18px;
   height: 18px;
@@ -2090,7 +2107,7 @@ input[type='date'],
   overflow-x: hidden;
   max-width: 100vw;
   padding: 24px;
-  background: rgba(71, 49, 34, 0.35);
+  background: rgba(10, 10, 10, 0.34);
   backdrop-filter: blur(12px);
 }
 
@@ -2115,8 +2132,8 @@ input[type='date'],
   gap: 8px;
   padding: 6px;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.56);
+  border-radius: 8px;
+  background: #f7f6f2;
 }
 
 .auth-tab {
@@ -2126,9 +2143,10 @@ input[type='date'],
 }
 
 .auth-tab.active {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(125, 149, 119, 0.34);
-  box-shadow: 0 8px 24px rgba(77, 49, 31, 0.08);
+  background: #191919;
+  border-color: #191919;
+  color: #fff;
+  box-shadow: none;
 }
 
 .auth-grid {
@@ -2163,14 +2181,14 @@ input[type='date'],
   height: 10px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(125, 149, 119, 0.14);
+  background: #e8e6df;
 }
 
 .password-meter-bar span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #c96d57, #d7a36d, #7d9577);
+  background: #191919;
 }
 
 .auth-help-card {
@@ -2178,8 +2196,8 @@ input[type='date'],
   gap: 8px;
   padding: 16px 18px;
   border: 1px solid var(--line);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.58);
+  border-radius: 8px;
+  background: #fbfaf8;
 }
 
 .auth-help-card p {
@@ -2204,9 +2222,35 @@ input[type='date'],
 }
 
 .check-row input {
+  display: grid;
+  place-content: center;
+  appearance: none;
   width: 18px;
   height: 18px;
   margin: 0;
+  border: 1px solid #cfc9bd;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.check-row input::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: #191919;
+  transform: scale(0);
+  transition: transform 140ms ease;
+}
+
+.check-row input:checked::before {
+  transform: scale(1);
+}
+
+.check-row input:focus-visible {
+  outline: 2px solid #191919;
+  outline-offset: 2px;
 }
 
 .field-note {
@@ -2246,7 +2290,7 @@ input[type='date'],
   position: relative;
   z-index: 1;
   padding: 0 10px;
-  background: rgba(255, 251, 247, 0.96);
+  background: #fff;
 }
 
 .google-signin-slot {
@@ -2273,7 +2317,7 @@ input[type='date'],
   border: 0;
   background: transparent;
   box-shadow: none;
-  color: #8a3f35;
+  color: #191919;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -3238,6 +3282,9 @@ input[type='date'],
 
 .landing-shell .experience-card {
   position: relative;
+  display: grid;
+  align-content: start;
+  gap: 10px;
   min-height: 275px;
   padding: 18px;
   border-radius: 8px;
@@ -3247,7 +3294,7 @@ input[type='date'],
 
 .experience-number {
   display: block;
-  margin: 18px 0 52px;
+  margin: 8px 0 36px;
   color: #b5b1a7;
   font-size: 13px;
   font-weight: 800;
@@ -3267,6 +3314,11 @@ input[type='date'],
 .experience-card.highlight {
   border-color: #191919;
   background: #fbfaf8;
+}
+
+.plan-action-btn {
+  width: fit-content;
+  margin-top: auto;
 }
 
 .landing-shell .faq-grid,
@@ -3318,6 +3370,10 @@ input[type='date'],
   gap: 0;
   overflow: hidden;
   min-height: min(760px, calc(100dvh - 48px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(25, 25, 25, 0.16);
 }
 
 .auth-story,
@@ -3329,10 +3385,17 @@ input[type='date'],
   display: grid;
   align-content: start;
   gap: 14px;
-  background:
-    radial-gradient(circle at top right, rgba(215, 163, 109, 0.24), transparent 28%),
-    linear-gradient(180deg, rgba(243, 234, 223, 0.96), rgba(231, 218, 201, 0.9));
+  background: #fbfaf8;
   border-right: 1px solid var(--line);
+}
+
+.auth-story h3,
+.auth-panel h3 {
+  margin: 0;
+  font-family: 'Manrope', sans-serif;
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1;
+  font-weight: 800;
 }
 
 .auth-story-panel {
@@ -3340,8 +3403,8 @@ input[type='date'],
   gap: 8px;
   padding: 18px;
   border: 1px solid var(--line);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.48);
+  border-radius: 8px;
+  background: #fff;
 }
 
 .auth-checklist {
@@ -3354,16 +3417,17 @@ input[type='date'],
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
 }
 
 .check-dot {
   width: 10px;
   height: 10px;
   flex: 0 0 auto;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--sage), var(--amber));
+  border-radius: 3px;
+  background: #191919;
 }
 
 .auth-close-top {
@@ -3374,7 +3438,7 @@ input[type='date'],
   display: grid;
   align-content: start;
   gap: 14px;
-  background: rgba(255, 251, 247, 0.96);
+  background: #fff;
   overflow-y: auto;
 }
 

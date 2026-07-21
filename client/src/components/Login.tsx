@@ -219,6 +219,11 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
   const passwordLabel = useMemo(() => getPasswordLabel(passwordScore), [passwordScore])
   const passwordsMatch = form.password === form.confirmPassword
   const goalPlan = goalIntent ? goalContent[goalIntent] : null
+  const showSecondaryActions =
+    (mode === 'register' && verificationAllowed) ||
+    mode === 'forgot' ||
+    mode === 'reset' ||
+    mode === 'verify'
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -797,43 +802,40 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
               </p>
             )}
 
-            <div className="auth-secondary-actions">
-              {mode === 'login' && (
-                <button type="button" className="auth-inline-link" onClick={() => switchMode('forgot')}>
-                  Forgot password?
-                </button>
-              )}
-              {mode === 'register' && verificationAllowed && (
-                <button type="button" className="auth-inline-link" onClick={() => switchMode('verify')}>
-                  Already have a code? Verify
-                </button>
-              )}
-              {mode === 'forgot' && (
-                <button type="button" className="auth-inline-link" onClick={() => switchMode('login')}>
-                  Back to login
-                </button>
-              )}
-              {mode === 'reset' && (
-                <button type="button" className="auth-inline-link" onClick={() => switchMode('forgot')}>
-                  Request another reset code
-                </button>
-              )}
-              {mode === 'verify' && (
-                <button
-                  type="button"
-                  className="auth-inline-link"
-                  onClick={() => void resendVerificationCode()}
-                  disabled={loading || verificationCooldown > 0}
-                >
-                  {verificationCooldown > 0 ? `Resend in ${verificationCooldown}s` : 'Resend verification code'}
-                </button>
-              )}
-              {mode === 'verify' && (
-                <button type="button" className="auth-inline-link" onClick={() => switchMode('login')}>
-                  Back to login
-                </button>
-              )}
-            </div>
+            {showSecondaryActions && (
+              <div className="auth-secondary-actions">
+                {mode === 'register' && verificationAllowed && (
+                  <button type="button" className="auth-inline-link" onClick={() => switchMode('verify')}>
+                    Already have a code? Verify
+                  </button>
+                )}
+                {mode === 'forgot' && (
+                  <button type="button" className="auth-inline-link" onClick={() => switchMode('login')}>
+                    Back to login
+                  </button>
+                )}
+                {mode === 'reset' && (
+                  <button type="button" className="auth-inline-link" onClick={() => switchMode('forgot')}>
+                    Request another reset code
+                  </button>
+                )}
+                {mode === 'verify' && (
+                  <button
+                    type="button"
+                    className="auth-inline-link"
+                    onClick={() => void resendVerificationCode()}
+                    disabled={loading || verificationCooldown > 0}
+                  >
+                    {verificationCooldown > 0 ? `Resend in ${verificationCooldown}s` : 'Resend verification code'}
+                  </button>
+                )}
+                {mode === 'verify' && (
+                  <button type="button" className="auth-inline-link" onClick={() => switchMode('login')}>
+                    Back to login
+                  </button>
+                )}
+              </div>
+            )}
           </form>
         </div>
       </div>

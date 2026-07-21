@@ -290,7 +290,6 @@ export default function App() {
   ]
   const visibleDesktopNav = desktopNavItems.filter((item) => item.label.toLowerCase().includes(navSearch.trim().toLowerCase()))
   const blogRouteActive = activePublicPage?.kind === 'blogIndex' || activePublicPage?.kind === 'blogArticle'
-  const landingSectionPrefix = activePublicPage ? '/' : ''
 
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -338,6 +337,28 @@ export default function App() {
   function closePublicPage() {
     setSelected(null)
     navigatePublicPage(null)
+  }
+
+  function openLandingSection(sectionId: 'start' | 'plans' | 'overview' | 'about') {
+    setSelected(null)
+    setFocusedTaskId(null)
+    setGoalIntent(null)
+    setActivePublicPage(null)
+
+    const nextHash = sectionId === 'start' ? '' : `#${sectionId}`
+    const nextPath = `/${nextHash}`
+    if (window.location.pathname !== '/' || window.location.hash !== nextHash) {
+      window.history.pushState({ zenflowPublic: true }, '', nextPath)
+    }
+
+    window.setTimeout(() => {
+      const target = document.getElementById(sectionId)
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+    }, 50)
   }
 
   useEffect(() => {
@@ -779,13 +800,18 @@ export default function App() {
         </div>
       </button>
       <header className={`app-header fade-rise ${publicShellMode ? 'guest-header' : ''}`}>
-        <div className="brand-wrap">
+        <button
+          type="button"
+          className="brand-wrap brand-home"
+          onClick={() => (account ? setView(null) : openLandingSection('start'))}
+          aria-label={account ? 'Open dashboard' : 'Open home'}
+        >
           <div className="brand-dot" aria-hidden />
           <div>
             <div className="brand">Zenflow</div>
             <div className="brand-sub">Focus, meditation, sudoku, and quick games</div>
           </div>
-        </div>
+        </button>
         <nav className="nav" aria-label="Main navigation">
           {account ? (
             visibleDesktopNav.length > 0 ? (
@@ -799,13 +825,13 @@ export default function App() {
             )
           ) : (
             <>
-              <a className="nav-link" href={`${landingSectionPrefix}#start`}>Home</a>
+              <button type="button" className={`nav-link ${!selected && !activePublicPage ? 'active' : ''}`} onClick={() => openLandingSection('start')}>Home</button>
               <button type="button" className={`nav-link ${selected === 'pomodoro' ? 'active' : ''}`} onClick={() => setView('pomodoro')}>Focus</button>
               <button type="button" className={`nav-link ${selected === 'meditation' ? 'active' : ''}`} onClick={() => setView('meditation')}>Meditate</button>
-              <a className="nav-link" href={`${landingSectionPrefix}#plans`}>Features</a>
-              <a className="nav-link" href={`${landingSectionPrefix}#overview`}>Overview</a>
+              <button type="button" className="nav-link" onClick={() => openLandingSection('plans')}>Features</button>
+              <button type="button" className="nav-link" onClick={() => openLandingSection('overview')}>Overview</button>
               <button type="button" className={`nav-link ${blogRouteActive ? 'active' : ''}`} onClick={openBlogIndex}>Blog</button>
-              <a className="nav-link" href={`${landingSectionPrefix}#about`}>About</a>
+              <button type="button" className="nav-link" onClick={() => openLandingSection('about')}>About</button>
             </>
           )}
         </nav>
