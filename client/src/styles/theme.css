@@ -313,41 +313,6 @@ button:active {
   padding: 0 16px;
 }
 
-.language-selector {
-  position: relative;
-  flex: 0 0 min(190px, 100%);
-}
-
-.language-selector select {
-  width: 100%;
-  min-height: 42px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: #fff;
-  color: var(--ink);
-  padding: 0 34px 0 12px;
-}
-
-.google-translate-mount {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
-
-body > .skiptranslate,
-.goog-te-banner-frame,
-.goog-te-balloon-frame,
-.goog-te-gadget {
-  display: none !important;
-}
-
-body {
-  top: 0 !important;
-}
-
 button:focus-visible,
 .nav-link:focus-visible,
 .login-btn:focus-visible,
@@ -4654,19 +4619,10 @@ input[type='date'],
     display: none;
   }
 
-  .language-selector {
-    width: 100%;
-    flex-basis: 100%;
-  }
-
   .app-header:not(.guest-header) .nav {
     display: flex;
     order: 3;
     width: calc(100% + 4px);
-  }
-
-  .app-header:not(.guest-header) .language-selector {
-    order: 2;
   }
 
   .app-header:not(.guest-header) .auth {

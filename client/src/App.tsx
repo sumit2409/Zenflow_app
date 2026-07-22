@@ -10,7 +10,6 @@ import MarketingLanding from './components/MarketingLanding'
 import BreakRoom from './components/BreakRoom'
 import CoachPanel, { type CoachResource } from './components/CoachPanel'
 import AdminDashboard from './components/AdminDashboard'
-import LanguageSelector from './components/LanguageSelector'
 import { BlogIndexPage, BlogArticlePage, BlogPreviewSection, blogPageMeta, isBlogArticleId, type BlogArticleId } from './components/BlogPages'
 import type { AuthAccount, StoredSession } from './types/auth'
 import type { GoalIntent } from './types/experience'
@@ -845,7 +844,6 @@ export default function App() {
             </>
           )}
         </nav>
-        <LanguageSelector />
         {account && (
           <label className="header-search" aria-label="Search navigation">
             <input
