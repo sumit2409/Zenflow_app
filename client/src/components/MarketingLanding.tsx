@@ -1,7 +1,7 @@
 ﻿import React, { useMemo, useState } from 'react'
 import type { GoalIntent } from '../types/experience'
 
-type LandingToolView = 'pomodoro' | 'meditation' | 'sudoku' | 'arcade' | 'planner'
+type LandingToolView = 'pomodoro' | 'meditation' | 'sudoku' | 'arcade' | 'breakroom' | 'cv' | 'planner'
 
 type Props = {
   onOpenAuth: (mode: 'login' | 'register', goal?: GoalIntent) => void
@@ -70,6 +70,57 @@ const faqs = [
   },
 ]
 
+const freeTools: Array<{
+  view: Exclude<LandingToolView, 'planner'>
+  title: string
+  promise: string
+  desc: string
+  tag: string
+}> = [
+  {
+    view: 'pomodoro',
+    title: 'Focus Timer',
+    promise: 'Take back your life',
+    desc: 'Start a timed work block without creating an account.',
+    tag: 'Deep work',
+  },
+  {
+    view: 'meditation',
+    title: 'Meditation',
+    promise: 'Calm your nervous system',
+    desc: 'Run a calm timer with breathing patterns and ambient sound.',
+    tag: 'Calm',
+  },
+  {
+    view: 'sudoku',
+    title: 'Sudoku',
+    promise: 'Sharpen your mind',
+    desc: 'Play a fresh puzzle and sign in later if you want saved best times.',
+    tag: 'Puzzle',
+  },
+  {
+    view: 'arcade',
+    title: 'Games',
+    promise: 'Train your reaction',
+    desc: 'Try quick memory and reaction drills during short breaks.',
+    tag: 'Reset',
+  },
+  {
+    view: 'breakroom',
+    title: 'Break Room',
+    promise: 'Reset without scrolling',
+    desc: 'Pick a reset activity after a focus session or long task.',
+    tag: 'Recovery',
+  },
+  {
+    view: 'cv',
+    title: 'CV Maker',
+    promise: 'Create a CV',
+    desc: 'Build a private CV in your browser and download it as a PDF.',
+    tag: 'Career',
+  },
+]
+
 export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
   const [selectedGoal, setSelectedGoal] = useState<GoalIntent>('focus')
   const androidAppUrl = 'https://raw.githubusercontent.com/sumit2409/Zenflow_app/main/downloads/zenflow-app.apk'
@@ -100,7 +151,7 @@ export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
     }
 
     return {
-      label: 'Log in for Sudoku',
+      label: 'Try Sudoku',
       action: () => onOpenTool('sudoku'),
     }
   }
@@ -236,8 +287,8 @@ export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
 
         <div className="landing-metrics">
           <div>
-            <strong>4 tools</strong>
-            <span>focus, meditation, sudoku, and games</span>
+            <strong>6 free tools</strong>
+            <span>focus, meditation, sudoku, games, break picks, and CV maker</span>
           </div>
           <div>
             <strong>1 account</strong>
@@ -247,6 +298,26 @@ export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
             <strong>{selectedPlan.timeline}</strong>
             <span>to get through the first session</span>
           </div>
+        </div>
+      </section>
+
+      <section className="free-tools-band fade-rise">
+        <div className="section-heading-block">
+          <div className="section-kicker">Free tools</div>
+          <h2>Take back your life, create a CV, and sharpen your mind.</h2>
+          <p className="lead">
+            Use these tools immediately. No account is needed unless you want Zenflow to save progress.
+          </p>
+        </div>
+        <div className="free-tools-grid">
+          {freeTools.map((tool) => (
+            <button key={tool.view} type="button" className="free-tool-card" onClick={() => onOpenTool(tool.view)}>
+              <span>{tool.tag}</span>
+              <strong>{tool.promise}</strong>
+              <em>{tool.title}</em>
+              <small>{tool.desc}</small>
+            </button>
+          ))}
         </div>
       </section>
 

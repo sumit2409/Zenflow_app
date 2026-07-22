@@ -70,9 +70,9 @@ export async function playPomodoroCompleteChime() {
 
 export async function playMeditationBell() {
   await playSequence([392, 523.25, 659.25, 783.99, 659.25], {
-    duration: 0.22,
-    gap: 0.08,
-    volume: 0.05,
+    duration: 0.24,
+    gap: 0.07,
+    volume: 0.12,
     type: 'sine',
   })
 }
@@ -89,6 +89,7 @@ export async function playVictoryFanfare() {
 export type MeditationAmbience = {
   start: () => Promise<void>
   stop: () => void
+  setVolume: (volume: number) => void
 }
 
 export function createMeditationAmbience(): MeditationAmbience {
@@ -96,6 +97,13 @@ export function createMeditationAmbience(): MeditationAmbience {
   let droneOsc: OscillatorNode | null = null
   let noiseGain: GainNode | null = null
   let droneGain: GainNode | null = null
+  let currentVolume = 0.45
+
+  function applyVolume() {
+    const normalizedVolume = Math.min(1, Math.max(0, currentVolume))
+    if (noiseGain) noiseGain.gain.value = 0.002 + normalizedVolume * 0.03
+    if (droneGain) droneGain.gain.value = 0.002 + normalizedVolume * 0.024
+  }
 
   return {
     async start() {
@@ -118,14 +126,15 @@ export function createMeditationAmbience(): MeditationAmbience {
       filter.Q.value = 0.7
 
       noiseGain = ctx.createGain()
-      noiseGain.gain.value = 0.012
+      noiseGain.gain.value = 0.0001
 
       droneOsc = ctx.createOscillator()
       droneOsc.type = 'sine'
       droneOsc.frequency.value = 174
 
       droneGain = ctx.createGain()
-      droneGain.gain.value = 0.01
+      droneGain.gain.value = 0.0001
+      applyVolume()
 
       noiseSource.connect(filter)
       filter.connect(noiseGain)
@@ -154,6 +163,10 @@ export function createMeditationAmbience(): MeditationAmbience {
       droneOsc = null
       noiseGain = null
       droneGain = null
+    },
+    setVolume(volume: number) {
+      currentVolume = Math.min(1, Math.max(0, volume))
+      applyVolume()
     },
   }
 }

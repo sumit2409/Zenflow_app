@@ -113,7 +113,7 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
   }, [hasStarted, isPaused, solved, startedAt])
 
   async function persistSolve(solveMs: number) {
-    if (!user || !token) return onRequireLogin?.()
+    if (!user || !token) return
     try {
       const requests = [
         fetch(apiUrl('/api/logs'), {
@@ -215,12 +215,15 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
     if (isSolved(nextGrid, puzzle.solution)) {
       const solveMs = getElapsedDuration(startedAt, elapsedMs)
       const isNewBest = !currentBestMs || solveMs < currentBestMs
+      const saveHint = user && token
+        ? `${isNewBest ? ' and set a new best time' : ''}.`
+        : '. Sign in to save your time and leaderboard progress.'
 
       setElapsedMs(solveMs)
       setStartedAt(null)
       setIsPaused(false)
       setSolved(true)
-      setWinMessage(`You solved the ${difficulty} puzzle in ${formatDurationMs(solveMs)}${isNewBest ? ' and set a new best time.' : '.'}`)
+      setWinMessage(`You solved the ${difficulty} puzzle in ${formatDurationMs(solveMs)}${saveHint}`)
       void playVictoryFanfare()
       void persistSolve(solveMs)
     }
@@ -247,7 +250,7 @@ export default function SudokuTrainer({ user, token, onRequireLogin }: Props) {
       <div className="module-meta">
         <h2>Sudoku</h2>
         <p>Play a fresh 9x9 puzzle, correct mistakes quickly, and track completed games.</p>
-        <div className="session-reward">Each completed puzzle adds to your daily progress.</div>
+        <div className="session-reward">{user && token ? 'Each completed puzzle adds to your daily progress.' : 'Free to play. Sign in when you want to save best times.'}</div>
       </div>
 
       <div className="sudoku-shell">

@@ -8,6 +8,7 @@ import ProfileCenter from './components/ProfileCenter'
 import BrainArcade from './components/BrainArcade'
 import MarketingLanding from './components/MarketingLanding'
 import BreakRoom from './components/BreakRoom'
+import CVMaker from './components/CVMaker'
 import CoachPanel, { type CoachResource } from './components/CoachPanel'
 import AdminDashboard from './components/AdminDashboard'
 import { BlogIndexPage, BlogArticlePage, BlogPreviewSection, blogPageMeta, isBlogArticleId, type BlogArticleId } from './components/BlogPages'
@@ -205,6 +206,7 @@ function resolveTrackedPage(selected: string | null, activePublicPage: PublicPag
       sudoku: { name: 'Sudoku', path: '/app/sudoku', kind: 'tool' },
       arcade: { name: 'Games', path: '/app/games', kind: 'tool' },
       breakroom: { name: 'Break Room', path: '/app/break-room', kind: 'tool' },
+      cv: { name: 'CV Maker', path: '/app/cv-maker', kind: 'tool' },
       planner: { name: 'Planner', path: '/app/planner', kind: 'dashboard' },
       profile: { name: 'Account', path: '/app/account', kind: 'dashboard' },
       admin: { name: 'Admin', path: '/app/admin', kind: 'dashboard' },
@@ -273,8 +275,8 @@ export default function App() {
   const previousAccountRef = useRef<AuthAccount | null>(initialSession?.account || null)
 
   const user = account?.username || null
-  const toolViews = ['pomodoro', 'meditation', 'sudoku', 'arcade', 'breakroom'] as const
-  const publicToolViews = ['pomodoro', 'meditation'] as const
+  const toolViews = ['pomodoro', 'meditation', 'sudoku', 'arcade', 'breakroom', 'cv'] as const
+  const publicToolViews = ['pomodoro', 'meditation', 'sudoku', 'arcade', 'breakroom', 'cv'] as const
   const isPublicToolSelected = Boolean(selected && publicToolViews.includes(selected as (typeof publicToolViews)[number]))
   const guestLandingMode = !account && !selected
   const publicShellMode = !account && (!selected || isPublicToolSelected)
@@ -286,6 +288,7 @@ export default function App() {
     { id: 'sudoku', label: 'Sudoku' },
     { id: 'arcade', label: 'Games' },
     ...(BREAK_ROOM_ENABLED ? [{ id: 'breakroom', label: 'Break Room' }] : []),
+    { id: 'cv', label: 'CV Maker' },
     { id: 'planner', label: 'Planner' },
     ...(account?.isAdmin ? [{ id: 'admin', label: 'Admin' }] : []),
   ]
@@ -558,7 +561,7 @@ export default function App() {
 
   function getAuthGoalForView(view: string | null): GoalIntent | undefined {
     if (view === 'sudoku' || view === 'arcade' || view === 'breakroom') return 'recovery'
-    if (view === 'planner' || view === null) return 'consistency'
+    if (view === 'planner' || view === 'cv' || view === null) return 'consistency'
     if (view === 'meditation') return 'calm'
     return 'focus'
   }
@@ -576,7 +579,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (selected === 'pomodoro' || selected === 'meditation' || selected === 'sudoku' || selected === 'arcade' || selected === 'breakroom') {
+    if (selected === 'pomodoro' || selected === 'meditation' || selected === 'sudoku' || selected === 'arcade' || selected === 'breakroom' || selected === 'cv') {
       setLastToolView(selected)
     }
   }, [selected])
@@ -587,6 +590,7 @@ export default function App() {
     sudoku: 'Sudoku — Zenflow',
     arcade: 'Games — Zenflow',
     breakroom: 'Break Room — Zenflow',
+    cv: 'CV Maker — Zenflow',
     planner: 'Planner — Zenflow',
     profile: 'Account — Zenflow',
     admin: 'Admin — Zenflow',
@@ -837,6 +841,9 @@ export default function App() {
               <button type="button" className={`nav-link ${!selected && !activePublicPage ? 'active' : ''}`} onClick={() => openLandingSection('start')}>Home</button>
               <button type="button" className={`nav-link ${selected === 'pomodoro' ? 'active' : ''}`} onClick={() => setView('pomodoro')}>Focus</button>
               <button type="button" className={`nav-link ${selected === 'meditation' ? 'active' : ''}`} onClick={() => setView('meditation')}>Meditate</button>
+              <button type="button" className={`nav-link ${selected === 'sudoku' ? 'active' : ''}`} onClick={() => setView('sudoku')}>Sudoku</button>
+              <button type="button" className={`nav-link ${selected === 'arcade' ? 'active' : ''}`} onClick={() => setView('arcade')}>Games</button>
+              <button type="button" className={`nav-link ${selected === 'cv' ? 'active' : ''}`} onClick={() => setView('cv')}>CV Maker</button>
               <button type="button" className="nav-link" onClick={() => openLandingSection('plans')}>Features</button>
               <button type="button" className="nav-link" onClick={() => openLandingSection('overview')}>Overview</button>
               <button type="button" className={`nav-link ${blogRouteActive ? 'active' : ''}`} onClick={openBlogIndex}>Blog</button>
@@ -1023,6 +1030,12 @@ export default function App() {
                     Break Room
                   </button>
                 )}
+                <button
+                  className={`tool-switch-btn ${selected === 'cv' ? 'active' : ''}`}
+                  onClick={() => setView('cv')}
+                >
+                  CV Maker
+                </button>
               </div>
             )}
             {selected === 'pomodoro' && (
@@ -1039,6 +1052,7 @@ export default function App() {
             {selected === 'sudoku' && <SudokuTrainer user={user} token={token} onRequireLogin={() => openAuth('login')} />}
             {selected === 'arcade' && <BrainArcade user={user} token={token} onRequireLogin={() => openAuth('login')} />}
             {selected === 'breakroom' && <BreakRoom onSelect={(id) => setView(id)} lastSessionMinutes={lastSessionMinutes} />}
+            {selected === 'cv' && <CVMaker />}
             {selected === 'planner' && (
               <PlannerBoard
                 initialDate={plannerFocusDate}

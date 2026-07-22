@@ -17,6 +17,7 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
   const [showMoodRating, setShowMoodRating] = useState(false)
   const [sessionMinutes, setSessionMinutes] = useState(0)
   const [completionNote, setCompletionNote] = useState('')
+  const [ambientVolume, setAmbientVolume] = useState(45)
 
   const [breathPattern, setBreathPattern] = useState<BreathPattern>('none')
   const [breathPhase, setBreathPhase] = useState<BreathPhase>('inhale')
@@ -69,6 +70,10 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
   }, [running])
 
   useEffect(() => () => ambienceRef.current.stop(), [])
+
+  useEffect(() => {
+    ambienceRef.current.setVolume(ambientVolume / 100)
+  }, [ambientVolume])
 
   useEffect(() => {
     if (!running || breathPattern === 'none') {
@@ -182,6 +187,19 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
           </button>
         ))}
       </div>
+      <label className="volume-control">
+        <span>Ambient volume</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={ambientVolume}
+          onChange={(event) => setAmbientVolume(Number(event.target.value))}
+          aria-valuetext={`${ambientVolume}%`}
+        />
+        <strong>{ambientVolume}%</strong>
+      </label>
       <div className="controls">
         <button onClick={toggleRunning}>{running ? 'Pause' : 'Start'}</button>
         <button

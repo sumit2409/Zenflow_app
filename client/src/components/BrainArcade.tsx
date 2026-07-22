@@ -161,10 +161,6 @@ export default function BrainArcade({ user, token, onRequireLogin }: Props) {
 
   function appendMemoryDigit(digit: string) {
     if (memoryState !== 'answer') return
-    if (!user || !token) {
-      onRequireLogin?.()
-      return
-    }
     setMemoryInput((current) => (current.length >= memorySequence.length ? current : `${current}${digit}`))
   }
 
@@ -175,15 +171,10 @@ export default function BrainArcade({ user, token, onRequireLogin }: Props) {
 
   function handleMemoryInput(value: string) {
     if (memoryState !== 'answer') return
-    if (!user || !token) {
-      onRequireLogin?.()
-      return
-    }
     setMemoryInput(value.replace(/[^1-9]/g, '').slice(0, memorySequence.length))
   }
 
   function startReaction() {
-    if (!user || !token) return onRequireLogin?.()
     setReactionState('waiting')
     setReactionMs(null)
     setReactionWinMessage('')
@@ -225,7 +216,7 @@ export default function BrainArcade({ user, token, onRequireLogin }: Props) {
       <div className="module-meta">
         <h2>Games</h2>
         <p>Use the memory and reaction drills for a short reset during the day.</p>
-        <div className="session-reward">Each completed round adds to your daily progress.</div>
+        <div className="session-reward">{user && token ? 'Each completed round adds to your daily progress.' : 'Free to play. Sign in when you want to save records.'}</div>
       </div>
 
       <div className="arcade-layout">
