@@ -276,7 +276,7 @@ export default function App() {
 
   const user = account?.username || null
   const toolViews = ['pomodoro', 'meditation', 'sudoku', 'arcade', 'breakroom', 'cv'] as const
-  const publicToolViews = ['pomodoro', 'meditation', 'sudoku', 'arcade', 'breakroom', 'cv'] as const
+  const publicToolViews = ['pomodoro', 'meditation', 'sudoku', 'arcade', 'breakroom'] as const
   const isPublicToolSelected = Boolean(selected && publicToolViews.includes(selected as (typeof publicToolViews)[number]))
   const guestLandingMode = !account && !selected
   const publicShellMode = !account && (!selected || isPublicToolSelected)
@@ -561,7 +561,8 @@ export default function App() {
 
   function getAuthGoalForView(view: string | null): GoalIntent | undefined {
     if (view === 'sudoku' || view === 'arcade' || view === 'breakroom') return 'recovery'
-    if (view === 'planner' || view === 'cv' || view === null) return 'consistency'
+    if (view === 'cv') return 'cv'
+    if (view === 'planner' || view === null) return 'consistency'
     if (view === 'meditation') return 'calm'
     return 'focus'
   }

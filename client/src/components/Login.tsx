@@ -69,6 +69,11 @@ const goalContent: Record<GoalIntent, { title: string; copy: string; checklist: 
     copy: 'Start with sudoku, memory training, and a short meditation break.',
     checklist: ['Play one game', 'Take one short break', 'Return to work'],
   },
+  cv: {
+    title: 'Open the free CV maker',
+    copy: 'Calm down, it is still free. You just need to login before using the CV maker.',
+    checklist: ['Sign in', 'Build your CV privately', 'Download the PDF'],
+  },
 }
 
 function getPasswordScore(password: string) {

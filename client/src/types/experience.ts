@@ -1,1 +1,1 @@
-export type GoalIntent = 'focus' | 'calm' | 'consistency' | 'recovery'
+export type GoalIntent = 'focus' | 'calm' | 'consistency' | 'recovery' | 'cv'

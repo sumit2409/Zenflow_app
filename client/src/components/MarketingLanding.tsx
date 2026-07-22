@@ -116,7 +116,7 @@ const freeTools: Array<{
     view: 'cv',
     title: 'CV Maker',
     promise: 'Create a CV',
-    desc: 'Build a private CV in your browser and download it as a PDF.',
+    desc: 'Calm down, it is still free. Login to build a private CV and download the PDF.',
     tag: 'Career',
   },
 ]
