@@ -64,6 +64,13 @@ cd zenflow_app
 npm --prefix server run announce:android
 ```
 
+Send the weekly wellness reminder email:
+
+```powershell
+cd zenflow_app
+npm --prefix server run announce:wellness
+```
+
 Useful flags:
 
 - `--dry-run`
@@ -71,6 +78,7 @@ Useful flags:
 - `--only=user@example.com`
 - `--provider=resend` (force Resend only)
 - `--provider=smtp` (force SMTP only)
+- `--force` (send again even if this week was already marked as sent)
 
 Trigger announcement by HTTPS (no shell) using the protected admin endpoint:
 
@@ -79,6 +87,15 @@ curl -X POST https://your-domain.com/api/admin/announce/android-release \
   -H "Content-Type: application/json" \
   -H "x-admin-key: YOUR_ADMIN_BROADCAST_KEY" \
   -d "{\"provider\":\"resend\",\"dryRun\":false}"
+```
+
+Weekly wellness reminders can also be triggered by HTTPS:
+
+```bash
+curl -X POST https://your-domain.com/api/admin/announce/weekly-wellness \
+  -H "Content-Type: application/json" \
+  -H "x-admin-key: YOUR_ADMIN_BROADCAST_KEY" \
+  -d "{\"provider\":\"auto\",\"dryRun\":false}"
 ```
 
 ## Render full app deploy
@@ -107,6 +124,7 @@ Optional auth environment variables:
 
 - `GOOGLE_CLIENT_ID`
 - `PUBLIC_APP_URL`
+- `VITE_ENABLE_ANALYTICS_IN_DEV` (`true` to emit analytics during local Vite development)
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_SECURE`
@@ -118,14 +136,48 @@ Optional auth environment variables:
 - `RESEND_FROM`
 - `APK_DOWNLOAD_URL` (optional direct APK URL used by `/download/android`)
 - `ADMIN_BROADCAST_KEY` (required for protected broadcast API endpoint)
+- `WEEKLY_WELLNESS_EMAILS_ENABLED` (`true` to let the server auto-send the weekly reminder)
+- `WEEKLY_WELLNESS_EMAILS_DAY_UTC` (`0-6`, where `1` is Monday; default `1`)
+- `WEEKLY_WELLNESS_EMAILS_HOUR_UTC` (`0-23`; default `9`)
+- `WEEKLY_WELLNESS_EMAILS_MINUTE_UTC` (`0-59`; default `0`)
 
 If `GOOGLE_CLIENT_ID` is set, the login screen shows Google Sign-In. If the SMTP settings are set, Zenflow can email password reset codes and recovery links.
 If `RESEND_API_KEY` and `RESEND_FROM` are set, password reset emails are sent via Resend API first, with SMTP as fallback.
+The GA4 site tag for measurement ID `G-B0H2J0ZX9T` is embedded directly in `client/index.html`, and the frontend sends sanitized SPA pageview analytics plus a pseudonymous non-PII `user_id` for signed-in accounts.
+For the weekly reminder to come from your domain, set `SMTP_FROM` and/or `RESEND_FROM` to something like `Zenflow <hello@zenflow.bio>` and make sure the `zenflow.bio` domain is configured with the correct SPF/DKIM records at your mail provider.
 
 After redeploy, the same Render URL works for both:
 
 - website: `https://your-render-service.onrender.com`
 - API: `https://your-render-service.onrender.com/api/...`
+
+## Website analytics with GA4
+
+Zenflow now includes an optional Google Analytics 4 integration in the client.
+
+Set these build-time environment variables for the frontend:
+
+- none required for the GA tag itself; the measurement ID `G-B0H2J0ZX9T` is embedded in `client/index.html`
+
+Optional local-development flag:
+
+- `VITE_ENABLE_ANALYTICS_IN_DEV=true`
+
+What the integration does:
+
+- loads the GA4 `gtag.js` tag from `client/index.html`
+- tracks manual `page_view` events for the landing page, legal pages, dashboard, and major in-app views
+- preserves UTM parameters while stripping sensitive query params such as password-reset and verification codes
+- assigns a pseudonymous server-generated `user_id` for signed-in users without sending email or username to GA4
+- emits a standard `login` event after successful authentication
+
+Where to look in GA4:
+
+- `Reports snapshot` for overall traffic and engagement
+- `Reports -> Acquisition -> Traffic acquisition` for source and medium
+- `Reports -> User -> Demographic details` for country, region, and city
+- `Reports -> Engagement -> Pages and screens` for tracked page views
+- `Explore` if you want to break down traffic by `user_id` or custom event parameters
 
 ## Android app
 

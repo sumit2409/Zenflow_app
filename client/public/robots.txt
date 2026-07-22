@@ -1,4 +1,9 @@
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /health
+Disallow: /download/android
+Disallow: /app/
 
+Host: zenflow.bio
 Sitemap: https://zenflow.bio/sitemap.xml
