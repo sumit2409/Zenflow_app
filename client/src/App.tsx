@@ -10,6 +10,7 @@ import MarketingLanding from './components/MarketingLanding'
 import BreakRoom from './components/BreakRoom'
 import CoachPanel, { type CoachResource } from './components/CoachPanel'
 import AdminDashboard from './components/AdminDashboard'
+import LanguageSelector from './components/LanguageSelector'
 import { BlogIndexPage, BlogArticlePage, BlogPreviewSection, blogPageMeta, isBlogArticleId, type BlogArticleId } from './components/BlogPages'
 import type { AuthAccount, StoredSession } from './types/auth'
 import type { GoalIntent } from './types/experience'
@@ -269,6 +270,7 @@ export default function App() {
   const [penguinKissing, setPenguinKissing] = useState(false)
   const overlayRef = useRef<HTMLDivElement>(null)
   const authTriggerRef = useRef<HTMLElement | null>(null)
+  const pendingAuthDestinationRef = useRef<{ view: string | null } | null>(null)
   const previousAccountRef = useRef<AuthAccount | null>(initialSession?.account || null)
 
   const user = account?.username || null
@@ -555,12 +557,20 @@ export default function App() {
     }, 1600)
   }
 
+  function getAuthGoalForView(view: string | null): GoalIntent | undefined {
+    if (view === 'sudoku' || view === 'arcade' || view === 'breakroom') return 'recovery'
+    if (view === 'planner' || view === null) return 'consistency'
+    if (view === 'meditation') return 'calm'
+    return 'focus'
+  }
+
   const setView = (view: string | null) => {
     if (activePublicPage) {
       clearPublicRoute()
     }
     if (!account && view && !publicToolViews.includes(view as (typeof publicToolViews)[number])) {
-      openAuth('login')
+      pendingAuthDestinationRef.current = { view }
+      openAuth('login', getAuthGoalForView(view))
       return
     }
     setSelected(view)
@@ -629,7 +639,7 @@ export default function App() {
   function openAuth(mode: 'login' | 'register', goal?: GoalIntent) {
     authTriggerRef.current = document.activeElement as HTMLElement
     setAuthMode(mode)
-    if (goal) setGoalIntent(goal)
+    setGoalIntent(goal || null)
     setShowLogin(true)
     history.pushState({ zenflowAuth: true }, '')
   }
@@ -835,6 +845,7 @@ export default function App() {
             </>
           )}
         </nav>
+        <LanguageSelector />
         {account && (
           <label className="header-search" aria-label="Search navigation">
             <input
@@ -1074,10 +1085,16 @@ export default function App() {
               trackLogin(nextAccount)
               setGoalIntent(null)
               setShowLogin(false)
+              const pendingDestination = pendingAuthDestinationRef.current
+              pendingAuthDestinationRef.current = null
+              if (pendingDestination) {
+                setSelected(pendingDestination.view)
+              }
             }}
             onClose={() => {
               setGoalIntent(null)
               setShowLogin(false)
+              pendingAuthDestinationRef.current = null
               if (history.state?.zenflowAuth) history.back()
               window.setTimeout(() => authTriggerRef.current?.focus(), 50)
             }}

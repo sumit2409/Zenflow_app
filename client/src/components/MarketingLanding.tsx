@@ -1,9 +1,11 @@
 ﻿import React, { useMemo, useState } from 'react'
 import type { GoalIntent } from '../types/experience'
 
+type LandingToolView = 'pomodoro' | 'meditation' | 'sudoku' | 'arcade' | 'planner'
+
 type Props = {
   onOpenAuth: (mode: 'login' | 'register', goal?: GoalIntent) => void
-  onOpenTool: (view: 'pomodoro' | 'meditation') => void
+  onOpenTool: (view: LandingToolView) => void
 }
 
 const goalOptions: Array<{
@@ -90,15 +92,24 @@ export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
       }
     }
 
+    if (goal.id === 'consistency') {
+      return {
+        label: 'Log in for Planner',
+        action: () => onOpenTool('planner'),
+      }
+    }
+
     return {
-      label: 'Create account',
-      action: () => onOpenAuth('register', goal.id),
+      label: 'Log in for Sudoku',
+      action: () => onOpenTool('sudoku'),
     }
   }
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+
+  const selectedPlanAction = getPlanAction(selectedPlan)
 
   return (
     <div className="landing-shell">
@@ -143,34 +154,44 @@ export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
               <span>Today</span>
             </div>
             <div className="workspace-body">
-              <div className="workspace-sidebar" aria-hidden="true">
-                <span className="active">Dashboard</span>
-                <span>Focus Timer</span>
-                <span>Meditation</span>
-                <span>Sudoku</span>
-                <span>Games</span>
+              <div className="workspace-sidebar" aria-label="Workspace preview navigation">
+                <button type="button" className="workspace-nav-btn active" onClick={() => onOpenAuth('login', 'consistency')}>
+                  Dashboard
+                </button>
+                <button type="button" className="workspace-nav-btn" onClick={() => onOpenTool('pomodoro')}>
+                  Focus Timer
+                </button>
+                <button type="button" className="workspace-nav-btn" onClick={() => onOpenTool('meditation')}>
+                  Meditation
+                </button>
+                <button type="button" className="workspace-nav-btn" onClick={() => onOpenTool('sudoku')}>
+                  Sudoku
+                </button>
+                <button type="button" className="workspace-nav-btn" onClick={() => onOpenTool('arcade')}>
+                  Games
+                </button>
               </div>
               <div className="workspace-main">
-                <div className="workspace-panel focus-panel">
+                <button type="button" className="workspace-panel focus-panel" onClick={() => onOpenTool('pomodoro')}>
                   <span className="panel-kicker">Focus Timer</span>
                   <strong>25:00</strong>
                   <div className="focus-progress" aria-hidden="true">
                     <span />
                   </div>
-                </div>
-                <div className="workspace-panel">
+                </button>
+                <button type="button" className="workspace-panel" onClick={() => onOpenTool('planner')}>
                   <span className="panel-kicker">Tasks</span>
                   <p>Daily Note</p>
                   <p>One Daily Session</p>
-                </div>
-                <div className="workspace-panel calm-panel">
+                </button>
+                <button type="button" className="workspace-panel calm-panel" onClick={() => onOpenTool('meditation')}>
                   <span className="panel-kicker">Meditation</span>
                   <strong>8 min</strong>
-                </div>
-                <div className="workspace-panel game-panel">
+                </button>
+                <button type="button" className="workspace-panel game-panel" onClick={() => onOpenTool('sudoku')}>
                   <span className="panel-kicker">Sudoku</span>
                   <strong>Level up</strong>
-                </div>
+                </button>
               </div>
             </div>
           </div>
@@ -206,8 +227,8 @@ export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
                   <span key={room}>{room}</span>
                 ))}
               </div>
-              <button className="primary-cta" onClick={() => onOpenAuth('register', selectedPlan.id)}>
-                Use this setup
+              <button className="primary-cta" onClick={selectedPlanAction.action}>
+                {selectedPlan.id === 'focus' || selectedPlan.id === 'calm' ? 'Use this setup' : selectedPlanAction.label}
               </button>
             </div>
           </aside>

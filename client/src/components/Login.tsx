@@ -254,7 +254,6 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
     }
 
     onLogin(json?.account || fallbackAccount, json.token, form.remember)
-    onClose?.()
   }
 
   async function signInWithGoogle(credential: string) {
