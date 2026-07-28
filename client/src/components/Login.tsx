@@ -119,6 +119,7 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const googleButtonRef = useRef<HTMLDivElement | null>(null)
+  const verificationLinkHandledRef = useRef(false)
 
   useEffect(() => {
     setMode(initialMode)
@@ -260,6 +261,57 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
 
     onLogin(json?.account || fallbackAccount, json.token, form.remember)
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('verify') !== '1' || verificationLinkHandledRef.current) return
+
+    const identifier = params.get('identifier') || ''
+    const code = params.get('code') || ''
+    if (!identifier || !code) return
+
+    verificationLinkHandledRef.current = true
+    setLoading(true)
+    setError(null)
+    setInfo('Verifying your email securely...')
+
+    const clearVerificationParams = () => {
+      const nextUrl = new URL(window.location.href)
+      nextUrl.searchParams.delete('verify')
+      nextUrl.searchParams.delete('identifier')
+      nextUrl.searchParams.delete('code')
+      window.history.replaceState({}, document.title, `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`)
+    }
+
+    async function verifyFromLink() {
+      try {
+        const response = await fetch(apiUrl('/api/email/verify'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ identifier, code }),
+        })
+        const json = await response.json().catch(() => null)
+        if (!response.ok) {
+          setForm((current) => ({ ...current, verificationCode: '' }))
+          setError(json?.error || 'This verification link is invalid or expired. Request a new email below.')
+          setInfo(null)
+          return
+        }
+
+        setInfo(json?.message || 'Email verified. You are now signed in.')
+        await completeLogin(json)
+      } catch (requestError) {
+        console.error(requestError)
+        setError('Network error while verifying your email. Request a fresh link and try again.')
+        setInfo(null)
+      } finally {
+        clearVerificationParams()
+        setLoading(false)
+      }
+    }
+
+    void verifyFromLink()
+  }, [])
 
   async function signInWithGoogle(credential: string) {
     setError(null)
