@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useRef, useState } from 'react'
-import { createMeditationAmbience, playMeditationBell, playPauseChime, playStartChime } from '../utils/sound'
+import { playMeditationBell, playPauseChime, playStartChime } from '../utils/sound'
 import { apiUrl } from '../utils/api'
+import './MeditationTimer.css'
 
 function todayKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -9,24 +10,40 @@ function todayKey(date = new Date()) {
 type Props = { user: string | null; token?: string | null; onRequireLogin?: () => void }
 type BreathPhase = 'inhale' | 'hold' | 'exhale' | 'hold2'
 type BreathPattern = 'none' | 'box' | '478'
+type NoiseTrack = { id: string; label: string; description: string; src: string }
+
+const presets = [5 * 60, 10 * 60, 20 * 60, 30 * 60]
+const noiseTracks: NoiseTrack[] = [
+  { id: 'waves', label: 'Waves', description: 'Rolling coastal waves', src: '/audio/47-Waves-10min.mp3' },
+  { id: 'ocean', label: 'Ocean', description: 'Deep, steady ocean', src: '/audio/25-Ocean-10min.mp3' },
+  { id: 'stream', label: 'Stream', description: 'Flowing freshwater', src: '/audio/30-Stream-10min.mp3' },
+  { id: 'rain', label: 'Rain', description: 'Even rainfall', src: '/audio/42-Rain-10min.mp3' },
+  { id: 'heater', label: 'Heater', description: 'Warm mechanical hum', src: '/audio/21-Heater-10min.mp3' },
+  { id: 'fan', label: 'Fan', description: 'Consistent fan sound', src: '/audio/20-Fan-10min.mp3' },
+  { id: 'white-noise', label: 'White noise', description: 'Classic broadband noise', src: '/audio/01-White-Noise-10min.mp3' },
+]
 
 export default function MeditationTimer({ user, token, onRequireLogin }: Props) {
-  const presets = [3 * 60, 5 * 60, 10 * 60]
-  const [seconds, setSeconds] = useState(presets[0])
+  const [seconds, setSeconds] = useState(presets[1])
   const [running, setRunning] = useState(false)
   const [showMoodRating, setShowMoodRating] = useState(false)
   const [sessionMinutes, setSessionMinutes] = useState(0)
   const [completionNote, setCompletionNote] = useState('')
   const [ambientVolume, setAmbientVolume] = useState(45)
+  const [selectedTrackId, setSelectedTrackId] = useState(noiseTracks[0].id)
+  const [customHours, setCustomHours] = useState(0)
+  const [customMinutes, setCustomMinutes] = useState(10)
+  const [customSeconds, setCustomSeconds] = useState(0)
 
   const [breathPattern, setBreathPattern] = useState<BreathPattern>('none')
   const [breathPhase, setBreathPhase] = useState<BreathPhase>('inhale')
   const [breathCount, setBreathCount] = useState(0)
 
-  const currentPreset = useRef<number>(presets[0])
+  const selectedDuration = useRef<number>(presets[1])
   const completedRef = useRef(false)
-  const ambienceRef = useRef(createMeditationAmbience())
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const breathIntervalRef = useRef<number | null>(null)
+  const selectedTrack = noiseTracks.find((track) => track.id === selectedTrackId) ?? noiseTracks[0]
 
   const breathPatterns: Record<BreathPattern, { label: string; phases: Array<{ name: BreathPhase; duration: number }> }> = {
     none: { label: 'No guide', phases: [] },
@@ -61,18 +78,21 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
   }, [seconds])
 
   useEffect(() => {
-    if (running) {
-      void ambienceRef.current.start()
-      return () => ambienceRef.current.stop()
-    }
-    ambienceRef.current.stop()
-    return undefined
-  }, [running])
+    const audio = audioRef.current
+    if (!audio) return
 
-  useEffect(() => () => ambienceRef.current.stop(), [])
+    if (running) {
+      void audio.play().catch(() => {
+        setRunning(false)
+        setCompletionNote('Sound could not start. Tap Start again to allow audio playback.')
+      })
+    } else {
+      audio.pause()
+    }
+  }, [running, selectedTrackId])
 
   useEffect(() => {
-    ambienceRef.current.setVolume(ambientVolume / 100)
+    if (audioRef.current) audioRef.current.volume = ambientVolume / 100
   }, [ambientVolume])
 
   useEffect(() => {
@@ -109,7 +129,7 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
     completedRef.current = true
     void playMeditationBell()
 
-    setSessionMinutes(currentPreset.current / 60)
+    setSessionMinutes(selectedDuration.current / 60)
     setCompletionNote(user && token ? '' : 'Session complete. Create an account when you want to save meditation history and mood check-ins.')
     setShowMoodRating(true)
   }, [seconds])
@@ -146,6 +166,7 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
 
   const toggleRunning = () => {
     if (!running) {
+      setCompletionNote('')
       void playStartChime()
     } else {
       void playPauseChime()
@@ -153,11 +174,24 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
     setRunning((value) => !value)
   }
 
+  const setDuration = (duration: number) => {
+    const safeDuration = Math.max(1, Math.floor(duration))
+    setSeconds(safeDuration)
+    selectedDuration.current = safeDuration
+    setRunning(false)
+    setShowMoodRating(false)
+    setCompletionNote('')
+  }
+
+  const applyCustomDuration = () => {
+    setDuration(customHours * 3600 + customMinutes * 60 + customSeconds)
+  }
+
   return (
     <div>
       <div className="module-meta">
         <h2>Guided Calm Window</h2>
-        <p>A soft ambient layer will play while your meditation timer is running.</p>
+        <p>Choose a calming sound and set a meditation timer that fits your day.</p>
         <div className="session-reward">A five-minute reset completes your calm ritual and softens the day.</div>
       </div>
       <div className="timer-display">{format(Math.max(0, seconds))}</div>
@@ -166,15 +200,54 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
           <button
             key={preset}
             onClick={() => {
-              setSeconds(preset)
-              currentPreset.current = preset
-              setRunning(false)
+              setDuration(preset)
             }}
           >
             {preset / 60} min
           </button>
         ))}
       </div>
+      <div className="meditation-settings">
+        <div className="custom-timer-panel">
+          <div>
+            <strong>Custom timer</strong>
+            <p className="muted">Set hours, minutes, and seconds.</p>
+          </div>
+          <div className="custom-time-inputs">
+            <label>
+              <span>Hours</span>
+              <input type="number" min={0} max={23} value={customHours} onChange={(event) => setCustomHours(Math.min(23, Math.max(0, Number(event.target.value))))} />
+            </label>
+            <label>
+              <span>Minutes</span>
+              <input type="number" min={0} max={59} value={customMinutes} onChange={(event) => setCustomMinutes(Math.min(59, Math.max(0, Number(event.target.value))))} />
+            </label>
+            <label>
+              <span>Seconds</span>
+              <input type="number" min={0} max={59} value={customSeconds} onChange={(event) => setCustomSeconds(Math.min(59, Math.max(0, Number(event.target.value))))} />
+            </label>
+          </div>
+          <button type="button" onClick={applyCustomDuration}>Set timer</button>
+        </div>
+        <div className="noise-picker">
+          <strong>Background sound</strong>
+          <div className="noise-track-grid">
+            {noiseTracks.map((track) => (
+              <button
+                key={track.id}
+                type="button"
+                className={`noise-track ${selectedTrackId === track.id ? 'active' : ''}`}
+                onClick={() => setSelectedTrackId(track.id)}
+                aria-pressed={selectedTrackId === track.id}
+              >
+                <span>{track.label}</span>
+                <small>{track.description}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <audio ref={audioRef} src={selectedTrack.src} loop preload="metadata" />
       <div className="controls">
         {(Object.keys(breathPatterns) as BreathPattern[]).map((key) => (
           <button
@@ -205,14 +278,14 @@ export default function MeditationTimer({ user, token, onRequireLogin }: Props) 
         <button
           onClick={() => {
             setRunning(false)
-            setSeconds(presets[0])
-            currentPreset.current = presets[0]
+            setSeconds(selectedDuration.current)
+            if (audioRef.current) audioRef.current.currentTime = 0
           }}
         >
           Reset
         </button>
       </div>
-      <p className="muted">The meditation timer uses a softer bell at completion while the ambient tone is active.</p>
+      <p className="muted">{selectedTrack.label} will loop gently until the timer ends. A soft bell marks completion.</p>
       {completionNote && <p className="muted">{completionNote}</p>}
 
       {breathPattern !== 'none' && running ? (

@@ -1,0 +1,99 @@
+.meditation-settings {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.7fr) minmax(360px, 1.3fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.custom-timer-panel,
+.noise-picker {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.custom-timer-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.custom-timer-panel p {
+  margin: 4px 0 0;
+}
+
+.custom-time-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.custom-time-inputs label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.custom-time-inputs span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.custom-time-inputs input {
+  min-width: 0;
+  padding: 10px;
+  text-align: center;
+}
+
+.noise-picker > strong {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.noise-track-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.noise-track {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.noise-track span {
+  font-weight: 800;
+}
+
+.noise-track small {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.noise-track.active {
+  border-color: #191919;
+  background: #191919;
+  color: #fff;
+}
+
+.noise-track.active small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+@media (max-width: 780px) {
+  .meditation-settings {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .noise-track-grid {
+    grid-template-columns: 1fr;
+  }
+}
