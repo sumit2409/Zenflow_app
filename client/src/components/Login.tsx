@@ -490,7 +490,19 @@ export default function Login({ initialMode = 'login', goalIntent, onLogin, onCl
       const json = await response.json().catch(() => null)
       if (!response.ok) {
         if (json?.requiresEmailVerification) {
-          setError(json?.error || 'Your account is not verified yet. Please use the verification email sent during registration.')
+          setForm((current) => ({
+            ...current,
+            identifier: json?.identifier || current.identifier,
+            verificationCode: json?.previewCode || '',
+            password: '',
+          }))
+          setVerificationAllowed(true)
+          setVerificationCooldown(json?.verificationEmailSent ? 60 : 0)
+          setMode('verify')
+          setInfo(json?.previewCode
+            ? `Development verification code: ${json.previewCode}`
+            : json?.error || 'Your account is not verified. Check your inbox for a fresh verification email.')
+          setError(null)
           return
         }
         setError(json?.error || `server error ${response.status}`)

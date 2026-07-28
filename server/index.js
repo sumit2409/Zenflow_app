@@ -61,6 +61,8 @@ const LOCKOUT_MS = 10 * 60 * 1000
 const PASSWORD_RESET_WINDOW_MS = 15 * 60 * 1000
 const EMAIL_VERIFICATION_WINDOW_MS = 15 * 60 * 1000
 const loginAttempts = new Map()
+const verificationLoginSends = new Map()
+const LOGIN_VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null
 let mailTransporter = null
 
@@ -1941,6 +1943,15 @@ function clearFailedAttempts(key) {
   loginAttempts.delete(key)
 }
 
+function canSendLoginVerification(identifier) {
+  const key = normalizeEmail(identifier) || String(identifier || '').trim().toLowerCase()
+  const lastSentAt = Number(verificationLoginSends.get(key) || 0)
+  const remainingMs = LOGIN_VERIFICATION_RESEND_COOLDOWN_MS - (Date.now() - lastSentAt)
+  if (remainingMs > 0) return { allowed: false, remainingMs }
+  verificationLoginSends.set(key, Date.now())
+  return { allowed: true, remainingMs: 0 }
+}
+
 async function connectDb() {
   if (isProduction && !process.env.MONGODB_URI) {
     console.error('MONGODB_URI is required in production.')
@@ -3121,10 +3132,34 @@ app.post('/api/login', async (req, res) => {
         return res.status(401).json({ error: 'invalid credentials' })
       }
       if (!isEmailVerified(match.user)) {
+        const verificationIdentifier = match.user.email || match.key
+        const resendState = canSendLoginVerification(verificationIdentifier)
+        let delivery = { delivered: false }
+        let verificationCode = ''
+
+        if (resendState.allowed) {
+          verificationCode = createResetCode()
+          match.user.emailVerificationCodeHash = hashResetCode(verificationCode)
+          match.user.emailVerificationExpiresAt = Date.now() + EMAIL_VERIFICATION_WINDOW_MS
+          writeData(data)
+          delivery = await sendEmailVerificationEmail({
+            to: match.user.email,
+            fullName: match.user.fullName || match.key,
+            code: verificationCode,
+            verifyUrl: buildEmailVerificationUrl(req, verificationIdentifier, verificationCode),
+          })
+        }
+
         return res.status(403).json({
-          error: 'verify your email before signing in',
+          error: resendState.allowed
+            ? delivery.delivered
+              ? 'Your account is not verified. We sent you a fresh verification email.'
+              : 'Your account is not verified. Email delivery is unavailable right now.'
+            : `Your account is not verified. A verification email was recently sent; try again in ${Math.ceil(resendState.remainingMs / 1000)} seconds.`,
           requiresEmailVerification: true,
-          identifier: match.user.email || match.key,
+          verificationEmailSent: delivery.delivered,
+          identifier: verificationIdentifier,
+          previewCode: delivery.delivered || isProduction ? undefined : verificationCode || undefined,
         })
       }
 
@@ -3153,10 +3188,34 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'invalid credentials' })
     }
     if (!isEmailVerified(user)) {
+      const verificationIdentifier = user.email || user.username
+      const resendState = canSendLoginVerification(verificationIdentifier)
+      let delivery = { delivered: false }
+      let verificationCode = ''
+
+      if (resendState.allowed) {
+        verificationCode = createResetCode()
+        user.emailVerificationCodeHash = hashResetCode(verificationCode)
+        user.emailVerificationExpiresAt = Date.now() + EMAIL_VERIFICATION_WINDOW_MS
+        await user.save()
+        delivery = await sendEmailVerificationEmail({
+          to: user.email,
+          fullName: user.fullName || user.username,
+          code: verificationCode,
+          verifyUrl: buildEmailVerificationUrl(req, verificationIdentifier, verificationCode),
+        })
+      }
+
       return res.status(403).json({
-        error: 'verify your email before signing in',
+        error: resendState.allowed
+          ? delivery.delivered
+            ? 'Your account is not verified. We sent you a fresh verification email.'
+            : 'Your account is not verified. Email delivery is unavailable right now.'
+          : `Your account is not verified. A verification email was recently sent; try again in ${Math.ceil(resendState.remainingMs / 1000)} seconds.`,
         requiresEmailVerification: true,
-        identifier: user.email || user.username,
+        verificationEmailSent: delivery.delivered,
+        identifier: verificationIdentifier,
+        previewCode: delivery.delivered || isProduction ? undefined : verificationCode || undefined,
       })
     }
 
