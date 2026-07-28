@@ -297,6 +297,7 @@ const emailCampaignSchema = new mongoose.Schema({
   scheduleMinuteUtc: { type: Number, default: 0 },
   scheduledAt: Number,
   deliveryRatePerMinute: { type: Number, default: 6 },
+  includeVerificationLink: { type: Boolean, default: false },
   lastScheduledDateKey: String,
   createdBy: String,
   updatedBy: String,
@@ -338,6 +339,9 @@ const emailJobSchema = new mongoose.Schema({
   nextAttemptAt: Number,
   lastError: String,
   sentAt: Number,
+  verificationEmail: { type: Boolean, default: false },
+  templateSubject: String,
+  templateBody: String,
   createdAt: Number,
   updatedAt: Number,
 })
@@ -505,6 +509,10 @@ function buildEmailVerificationUrl(req, identifier, code) {
   const protocol = forwardedProto || req.protocol || 'https'
   const host = req.get('host')
   const baseUrl = PUBLIC_APP_URL || `${protocol}://${host}`
+  return buildEmailVerificationUrlFromBase(baseUrl, identifier, code)
+}
+
+function buildEmailVerificationUrlFromBase(baseUrl, identifier, code) {
   const params = new URLSearchParams({
     verify: '1',
     identifier: String(identifier || ''),
@@ -1096,23 +1104,32 @@ function buildTemplateVariables(user) {
     username: sanitizeSingleLine(user?.username || '', 120),
     email: normalizeEmail(user?.email || user?.emailLower || ''),
     signupDate: signupValue,
+    verificationLink: String(user?.verificationLink || ''),
   }
 }
 
 function renderTemplateString(template, variables) {
-  return String(template || '').replace(/\{\{\s*(userName|username|email|signupDate)\s*\}\}/g, (_, key) => variables[key] || '')
+  return String(template || '').replace(/\{\{\s*(userName|username|email|signupDate|verificationLink)\s*\}\}/g, (_, key) => variables[key] || '')
 }
 
 function buildRenderedEmailContent({ subject, body, user }) {
   const variables = buildTemplateVariables(user)
   const renderedSubject = renderTemplateString(subject, variables)
   const renderedBody = renderTemplateString(body, variables)
+  let renderedHtml = formatPlainTextAsHtml(renderedBody)
+  if (variables.verificationLink) {
+    const safeVerificationLink = escapeHtml(variables.verificationLink)
+    renderedHtml = renderedHtml.replace(
+      safeVerificationLink,
+      `<a href="${safeVerificationLink}" style="display:inline-block;padding:12px 18px;border-radius:8px;background:#191919;color:#ffffff;text-decoration:none;font-weight:700">Verify my Zenflow account</a>`
+    )
+  }
   return {
     subject: renderedSubject,
     text: renderedBody,
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.7;color:#2f241e">
-        ${formatPlainTextAsHtml(renderedBody)}
+        ${renderedHtml}
       </div>
     `,
   }
@@ -2426,6 +2443,7 @@ async function upsertEmailCampaignRecord(campaign) {
     scheduleMinuteUtc: clampIntegerEnv(campaign.scheduleMinuteUtc, 0, 0, 59),
     scheduledAt: Math.max(0, Number(campaign.scheduledAt || 0)),
     deliveryRatePerMinute: clampIntegerEnv(campaign.deliveryRatePerMinute, 6, 1, 60),
+    includeVerificationLink: Boolean(campaign.includeVerificationLink),
     lastScheduledDateKey: sanitizeSingleLine(campaign.lastScheduledDateKey, 40),
     createdBy: sanitizeSingleLine(campaign.createdBy, 80),
     updatedBy: sanitizeSingleLine(campaign.updatedBy, 80),
@@ -2462,6 +2480,7 @@ async function upsertEmailCampaignRecord(campaign) {
     scheduleMinuteUtc: sanitized.scheduleMinuteUtc,
     scheduledAt: sanitized.scheduledAt,
     deliveryRatePerMinute: sanitized.deliveryRatePerMinute,
+    includeVerificationLink: sanitized.includeVerificationLink,
     lastScheduledDateKey: sanitized.lastScheduledDateKey,
     createdBy: existing?.createdBy || sanitized.createdBy,
     updatedBy: sanitized.updatedBy,
@@ -2622,6 +2641,9 @@ async function createEmailJobRecord(job) {
     nextAttemptAt: Number(job.nextAttemptAt || Date.now()),
     lastError: sanitizeSingleLine(job.lastError, 500),
     sentAt: Number(job.sentAt || 0) || null,
+    verificationEmail: Boolean(job.verificationEmail),
+    templateSubject: sanitizeSingleLine(job.templateSubject, 220),
+    templateBody: sanitizeMultiline(job.templateBody, 20000),
     createdAt: Number(job.createdAt || Date.now()),
     updatedAt: Date.now(),
   }
@@ -2650,6 +2672,9 @@ async function createEmailJobRecord(job) {
     nextAttemptAt: payload.nextAttemptAt,
     lastError: payload.lastError,
     sentAt: payload.sentAt,
+    verificationEmail: payload.verificationEmail,
+    templateSubject: payload.templateSubject,
+    templateBody: payload.templateBody,
     createdAt: payload.createdAt,
     updatedAt: payload.updatedAt,
   })
@@ -2754,6 +2779,9 @@ async function enqueueCampaignRun({ campaign, actorUser, testEmail = '' }) {
       status: 'pending',
       attemptCount: 0,
       nextAttemptAt: testEmail ? Date.now() : scheduledStart + recipientIndex * deliverySpacingMs,
+      verificationEmail: Boolean(campaign.includeVerificationLink && !testEmail),
+      templateSubject: campaign.subject,
+      templateBody: campaign.body,
     })
   }
 
@@ -2769,6 +2797,29 @@ async function enqueueCampaignRun({ campaign, actorUser, testEmail = '' }) {
 function buildRetryDelayMs(attemptCount) {
   const safeAttempt = Math.max(1, Number(attemptCount || 1))
   return Math.min(60 * 60 * 1000, safeAttempt * 5 * 60 * 1000)
+}
+
+async function issueQueuedVerificationLink(job) {
+  const identifier = normalizeEmail(job?.toEmail) || sanitizeSingleLine(job?.username, 80)
+  if (!identifier) return ''
+
+  const verificationCode = createResetCode()
+  if (useFileStorage) {
+    const data = readData()
+    const match = findFileUser(data, identifier)
+    if (!match || isEmailVerified(match.user)) return ''
+    match.user.emailVerificationCodeHash = hashResetCode(verificationCode)
+    match.user.emailVerificationExpiresAt = Date.now() + EMAIL_VERIFICATION_WINDOW_MS
+    writeData(data)
+  } else {
+    const user = await findDbUser(identifier)
+    if (!user || isEmailVerified(user)) return ''
+    user.emailVerificationCodeHash = hashResetCode(verificationCode)
+    user.emailVerificationExpiresAt = Date.now() + EMAIL_VERIFICATION_WINDOW_MS
+    await user.save()
+  }
+
+  return buildEmailVerificationUrlFromBase(PUBLIC_APP_URL || WEBSITE_URL, identifier, verificationCode)
 }
 
 async function maybeEnqueueDueDailyCampaigns() {
@@ -2827,12 +2878,42 @@ async function processEmailQueue() {
 
     for (const job of jobs) {
       const jobId = job.id || String(job._id)
+      let deliverySubject = job.subject
+      let deliveryText = job.bodyText
+      let deliveryHtml = job.bodyHtml
+
+      if (job.verificationEmail) {
+        const verificationLink = await issueQueuedVerificationLink(job)
+        if (!verificationLink) {
+          await updateEmailJobRecord(jobId, {
+            status: 'cancelled',
+            lastError: 'Account is already verified or no longer available',
+          })
+          if (job.runId) await refreshRunCounts(job.runId)
+          continue
+        }
+
+        const rendered = buildRenderedEmailContent({
+          subject: job.templateSubject || job.subject,
+          body: job.templateBody || job.bodyText,
+          user: {
+            username: job.username,
+            fullName: job.toName,
+            email: job.toEmail,
+            verificationLink,
+          },
+        })
+        deliverySubject = rendered.subject
+        deliveryText = rendered.text
+        deliveryHtml = rendered.html
+      }
+
       await updateEmailJobRecord(jobId, { status: 'sending', attemptCount: Number(job.attemptCount || 0) + 1 })
       const result = await sendTransactionalEmail({
         to: job.toEmail,
-        subject: job.subject,
-        text: job.bodyText,
-        html: job.bodyHtml,
+        subject: deliverySubject,
+        text: deliveryText,
+        html: deliveryHtml,
         preferredProvider: job.preferredProvider || 'auto',
       })
 
@@ -4039,6 +4120,74 @@ app.post('/api/admin/campaigns/preview', authMiddleware, adminMiddleware, async 
     })
   } catch (error) {
     console.error('Admin campaign preview failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/campaigns/verification-reminder', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const draftCampaign = {
+      name: `Unverified account reminder ${formatEmailDateKey()}`,
+      kind: 'one_off',
+      targetMode: 'unverified',
+      selectedRecipients: [],
+      subject: 'How have you been? Let’s finish setting up your Zenflow account',
+      body: [
+        'Hi {{userName}},',
+        '',
+        'How have you been lately?',
+        '',
+        'We hope life is treating you well and that you’re finding time for yourself, your goals, and the things that matter to you.',
+        '',
+        'We noticed that your Zenflow account is still waiting for email verification. If you lost the original verification email or did not get a chance to finish, you can verify your account in either of these ways:',
+        '',
+        'Option 1 — Log in again',
+        '',
+        'Visit https://zenflow.bio/ and sign in using your usual email and password. Zenflow will automatically send you a fresh verification email.',
+        '',
+        'Option 2 — Use your personal verification link',
+        '',
+        '{{verificationLink}}',
+        '',
+        'Clicking the link verifies your email and signs you in automatically. For security, the link expires 15 minutes after this email is delivered.',
+        '',
+        'We’d be happy to have you back.',
+        '',
+        'Take care,',
+        'The Zenflow Team',
+      ].join('\n'),
+      preferredProvider: 'auto',
+      status: 'queued',
+      scheduledAt: Date.now(),
+      deliveryRatePerMinute: clampIntegerEnv(req.body?.deliveryRatePerMinute, 4, 1, 20),
+      includeVerificationLink: true,
+      createdBy: req.adminUser.username,
+      updatedBy: req.adminUser.username,
+    }
+
+    const eligibleRecipients = await resolveCampaignRecipients(draftCampaign)
+    if (!eligibleRecipients.length) {
+      return res.status(400).json({ error: 'there are no unverified users with an email address' })
+    }
+
+    const campaign = await upsertEmailCampaignRecord(draftCampaign)
+    const run = await enqueueCampaignRun({ campaign, actorUser: req.adminUser })
+
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.campaign.verification_reminder',
+      targetType: 'campaign',
+      targetId: campaign.id || campaign._id,
+      summary: `Queued personalized verification reminders for ${run.recipientCount} unverified users`,
+      metadata: {
+        recipientCount: run.recipientCount,
+        deliveryRatePerMinute: campaign.deliveryRatePerMinute,
+      },
+    })
+
+    return res.json({ ok: true, campaign, run })
+  } catch (error) {
+    console.error('Admin verification reminder campaign failed:', error)
     return res.status(500).json({ error: 'server error' })
   }
 })

@@ -441,6 +441,7 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
   const [replyEditor, setReplyEditor] = useState<ReplyEditorState>({ ...EMPTY_REPLY })
   const [replyBusy, setReplyBusy] = useState(false)
   const [sendNowBusy, setSendNowBusy] = useState(false)
+  const [verificationReminderBusy, setVerificationReminderBusy] = useState(false)
 
   async function adminFetch<T>(path: string, init?: RequestInit) {
     const response = await fetch(apiUrl(path), {
@@ -846,6 +847,23 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
       onNotify?.(action === 'retry' ? 'Email returned to the queue.' : 'Queued email cancelled.')
     } catch (error) {
       onNotify?.(String((error as Error)?.message || 'Queue update failed'))
+    }
+  }
+
+  async function queueVerificationReminders() {
+    if (!window.confirm('Queue a personalized verification email for every currently unverified user?')) return
+    setVerificationReminderBusy(true)
+    try {
+      const payload = await adminFetch<{ run: CampaignRun }>('/api/admin/campaigns/verification-reminder', {
+        method: 'POST',
+        body: JSON.stringify({ deliveryRatePerMinute: 4 }),
+      })
+      await Promise.all([loadCampaigns(), loadQueue(), loadOverview(), loadAuditLogs()])
+      onNotify?.(`Queued ${payload.run.recipientCount} personalized verification emails at 4 per minute.`)
+    } catch (error) {
+      onNotify?.(String((error as Error)?.message || 'Verification reminders could not be queued'))
+    } finally {
+      setVerificationReminderBusy(false)
     }
   }
 
@@ -1348,6 +1366,14 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                   }}
                 >
                   Appreciation draft
+                </button>
+                <button
+                  type="button"
+                  className="login-btn"
+                  onClick={() => void queueVerificationReminders()}
+                  disabled={verificationReminderBusy}
+                >
+                  {verificationReminderBusy ? 'Building reminders...' : 'Send verification reminders'}
                 </button>
               </div>
             }
