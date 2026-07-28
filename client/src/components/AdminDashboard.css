@@ -1,0 +1,45 @@
+.admin-mail-folders {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 252, 249, 0.72);
+}
+
+.admin-mail-folders button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.admin-mail-folders button.active {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(47, 36, 30, 0.14);
+}
+
+.admin-message-card {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.admin-message-card:hover {
+  border-color: rgba(194, 138, 102, 0.5);
+  box-shadow: 0 12px 28px rgba(77, 49, 31, 0.08);
+  transform: translateY(-1px);
+}
+
+.admin-status-pill + .admin-inline-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 780px) {
+  .admin-status-pill + .admin-inline-actions {
+    justify-content: flex-start;
+  }
+}

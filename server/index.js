@@ -293,6 +293,8 @@ const emailCampaignSchema = new mongoose.Schema({
   scheduleEnabled: { type: Boolean, default: false },
   scheduleHourUtc: { type: Number, default: 9 },
   scheduleMinuteUtc: { type: Number, default: 0 },
+  scheduledAt: Number,
+  deliveryRatePerMinute: { type: Number, default: 6 },
   lastScheduledDateKey: String,
   createdBy: String,
   updatedBy: String,
@@ -2201,15 +2203,17 @@ async function getAdminUserDetail(username) {
   }
 }
 
-async function listContactMessages({ search = '', page = 1, pageSize = ADMIN_LIST_PAGE_SIZE } = {}) {
+async function listContactMessages({ search = '', status = 'all', page = 1, pageSize = ADMIN_LIST_PAGE_SIZE } = {}) {
   const safePage = clampPage(page)
   const safePageSize = clampPageSize(pageSize)
   const normalizedSearch = sanitizeSingleLine(search, 120).toLowerCase()
+  const normalizedStatus = ['new', 'replied', 'archived'].includes(String(status)) ? String(status) : 'all'
 
   if (useFileStorage) {
     const data = readData()
     const admin = ensureAdminStore(data)
     const records = [...admin.contactMessages]
+      .filter((entry) => normalizedStatus === 'all' || entry.status === normalizedStatus)
       .filter((entry) => !normalizedSearch || [entry.fullName, entry.email, entry.message].some((field) => String(field || '').toLowerCase().includes(normalizedSearch)))
       .sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
 
@@ -2224,15 +2228,16 @@ async function listContactMessages({ search = '', page = 1, pageSize = ADMIN_LIS
     }
   }
 
-  const filter = normalizedSearch
-    ? {
-      $or: [
+  const filter = {
+    ...(normalizedStatus === 'all' ? {} : { status: normalizedStatus }),
+    ...(normalizedSearch
+      ? { $or: [
         { fullName: { $regex: normalizedSearch, $options: 'i' } },
         { email: { $regex: normalizedSearch, $options: 'i' } },
         { message: { $regex: normalizedSearch, $options: 'i' } },
-      ],
-    }
-    : {}
+      ] }
+      : {}),
+  }
 
   const [items, total] = await Promise.all([
     ContactMessage.find(filter).sort({ createdAt: -1 }).skip((safePage - 1) * safePageSize).limit(safePageSize).lean().exec(),
@@ -2408,6 +2413,8 @@ async function upsertEmailCampaignRecord(campaign) {
     scheduleEnabled: Boolean(campaign.scheduleEnabled),
     scheduleHourUtc: clampIntegerEnv(campaign.scheduleHourUtc, 9, 0, 23),
     scheduleMinuteUtc: clampIntegerEnv(campaign.scheduleMinuteUtc, 0, 0, 59),
+    scheduledAt: Math.max(0, Number(campaign.scheduledAt || 0)),
+    deliveryRatePerMinute: clampIntegerEnv(campaign.deliveryRatePerMinute, 6, 1, 60),
     lastScheduledDateKey: sanitizeSingleLine(campaign.lastScheduledDateKey, 40),
     createdBy: sanitizeSingleLine(campaign.createdBy, 80),
     updatedBy: sanitizeSingleLine(campaign.updatedBy, 80),
@@ -2442,6 +2449,8 @@ async function upsertEmailCampaignRecord(campaign) {
     scheduleEnabled: sanitized.scheduleEnabled,
     scheduleHourUtc: sanitized.scheduleHourUtc,
     scheduleMinuteUtc: sanitized.scheduleMinuteUtc,
+    scheduledAt: sanitized.scheduledAt,
+    deliveryRatePerMinute: sanitized.deliveryRatePerMinute,
     lastScheduledDateKey: sanitized.lastScheduledDateKey,
     createdBy: existing?.createdBy || sanitized.createdBy,
     updatedBy: sanitized.updatedBy,
@@ -2493,14 +2502,19 @@ async function listEmailJobs(limit = 100) {
 async function resolveCampaignRecipients(campaign) {
   const mode = sanitizeSingleLine(campaign?.targetMode, 40) || 'selected'
   const usersWithData = await loadAllUsersWithData()
-  const recipients = usersWithData
+  const usersWithEmail = usersWithData
     .map(({ user }) => user)
-    .filter(userCanReceiveCampaigns)
+    .filter((user) => Boolean(normalizeEmail(user?.email || user?.emailLower || '')))
 
-  if (mode === 'all') {
-    return recipients
+  if (mode === 'all' || mode === 'verified') {
+    return usersWithEmail.filter(isEmailVerified)
   }
 
+  if (mode === 'unverified') {
+    return usersWithEmail.filter((user) => !isEmailVerified(user))
+  }
+
+  const recipients = usersWithEmail.filter(userCanReceiveCampaigns)
   if (mode === 'one') {
     const first = normalizeSelectedRecipients(campaign?.selectedRecipients).slice(0, 1)
     return recipients.filter((user) => first.includes(String(user.username || '').toLowerCase()) || first.includes(String(user.email || '').toLowerCase()))
@@ -2706,7 +2720,11 @@ async function enqueueCampaignRun({ campaign, actorUser, testEmail = '' }) {
     startedAt: Date.now(),
   })
 
-  for (const recipient of filteredRecipients) {
+  const scheduledStart = Math.max(Date.now(), Number(campaign.scheduledAt || 0))
+  const deliveryRate = clampIntegerEnv(campaign.deliveryRatePerMinute, 6, 1, 60)
+  const deliverySpacingMs = Math.ceil(60000 / deliveryRate)
+
+  for (const [recipientIndex, recipient] of filteredRecipients.entries()) {
     const rendered = buildRenderedEmailContent({
       subject: campaign.subject,
       body: campaign.body,
@@ -2724,7 +2742,7 @@ async function enqueueCampaignRun({ campaign, actorUser, testEmail = '' }) {
       preferredProvider: campaign.preferredProvider || 'auto',
       status: 'pending',
       attemptCount: 0,
-      nextAttemptAt: Date.now(),
+      nextAttemptAt: testEmail ? Date.now() : scheduledStart + recipientIndex * deliverySpacingMs,
     })
   }
 
@@ -3668,6 +3686,7 @@ app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) =>
   try {
     const result = await listAdminUsers({
       search: req.query?.search,
+      status: req.query?.status,
       filter: req.query?.filter,
       sort: req.query?.sort,
       page: req.query?.page,
@@ -3902,7 +3921,7 @@ app.post('/api/admin/campaigns', authMiddleware, adminMiddleware, async (req, re
     return res.status(400).json({ error: 'invalid campaign kind' })
   }
 
-  if (!['one', 'selected', 'all'].includes(targetMode)) {
+  if (!['one', 'selected', 'all', 'verified', 'unverified'].includes(targetMode)) {
     return res.status(400).json({ error: 'invalid target mode' })
   }
 
@@ -3921,6 +3940,8 @@ app.post('/api/admin/campaigns', authMiddleware, adminMiddleware, async (req, re
       scheduleEnabled: req.body?.scheduleEnabled,
       scheduleHourUtc: req.body?.scheduleHourUtc,
       scheduleMinuteUtc: req.body?.scheduleMinuteUtc,
+      scheduledAt: req.body?.scheduledAt,
+      deliveryRatePerMinute: req.body?.deliveryRatePerMinute,
       lastScheduledDateKey: req.body?.lastScheduledDateKey,
       createdBy: req.adminUser.username,
       updatedBy: req.adminUser.username,
@@ -4184,6 +4205,58 @@ app.get('/api/admin/queue', authMiddleware, adminMiddleware, async (req, res) =>
     })
   } catch (error) {
     console.error('Admin queue failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/queue/:id/retry', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const updated = await updateEmailJobRecord(req.params.id, {
+      status: 'pending',
+      attemptCount: 0,
+      nextAttemptAt: Date.now(),
+      lastError: '',
+      sentAt: null,
+    })
+    if (!updated) return res.status(404).json({ error: 'queue job not found' })
+    if (updated.runId) await refreshRunCounts(updated.runId)
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.queue.retry',
+      targetType: 'email-job',
+      targetId: req.params.id,
+      summary: `Retried queued email to ${updated.toEmail}`,
+    })
+    return res.json({ ok: true, item: updated })
+  } catch (error) {
+    console.error('Admin queue retry failed:', error)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
+app.post('/api/admin/queue/:id/cancel', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const jobs = await listEmailJobs(500)
+    const existing = jobs.find((entry) => String(entry.id || entry._id) === String(req.params.id))
+    if (!existing) return res.status(404).json({ error: 'queue job not found' })
+    if (!['pending', 'failed'].includes(existing.status)) {
+      return res.status(400).json({ error: 'only pending or failed jobs can be cancelled' })
+    }
+    const updated = await updateEmailJobRecord(req.params.id, {
+      status: 'cancelled',
+      lastError: '',
+    })
+    if (updated.runId) await refreshRunCounts(updated.runId)
+    await recordAuditLog({
+      actorUser: req.adminUser,
+      action: 'admin.queue.cancel',
+      targetType: 'email-job',
+      targetId: req.params.id,
+      summary: `Cancelled queued email to ${updated.toEmail}`,
+    })
+    return res.json({ ok: true, item: updated })
+  } catch (error) {
+    console.error('Admin queue cancel failed:', error)
     return res.status(500).json({ error: 'server error' })
   }
 })

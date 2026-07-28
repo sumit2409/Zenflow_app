@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { AuthAccount } from '../types/auth'
 import { apiUrl } from '../utils/api'
+import './AdminDashboard.css'
 
 type Props = {
   account: AuthAccount | null
@@ -11,9 +12,10 @@ type Props = {
 
 type AdminTab = 'overview' | 'users' | 'messages' | 'campaigns' | 'templates' | 'queue' | 'audit'
 type UserFilter = 'all' | 'verified' | 'unverified' | 'active' | 'inactive'
+type MessageFilter = 'all' | 'new' | 'replied' | 'archived'
 type UserSort = 'created_desc' | 'created_asc' | 'login_desc' | 'points_desc' | 'email_asc' | 'username_asc'
 type CampaignKind = 'one_off' | 'daily' | 'thank_you'
-type TargetMode = 'selected' | 'one' | 'all'
+type TargetMode = 'selected' | 'one' | 'all' | 'verified' | 'unverified'
 
 type AdminOverview = {
   counts: {
@@ -103,6 +105,8 @@ type EmailCampaign = {
   scheduleEnabled?: boolean
   scheduleHourUtc?: number
   scheduleMinuteUtc?: number
+  scheduledAt?: number
+  deliveryRatePerMinute?: number
   lastScheduledDateKey?: string
   createdBy?: string
   updatedBy?: string
@@ -197,6 +201,8 @@ type CampaignEditorState = {
   scheduleEnabled: boolean
   scheduleHourUtc: number
   scheduleMinuteUtc: number
+  scheduledAt: number
+  deliveryRatePerMinute: number
   lastScheduledDateKey: string
 }
 
@@ -272,6 +278,8 @@ const EMPTY_CAMPAIGN: CampaignEditorState = {
   scheduleEnabled: false,
   scheduleHourUtc: 9,
   scheduleMinuteUtc: 0,
+  scheduledAt: 0,
+  deliveryRatePerMinute: 6,
   lastScheduledDateKey: '',
 }
 
@@ -333,6 +341,8 @@ function toCampaignEditor(campaign?: EmailCampaign | null): CampaignEditorState 
     scheduleEnabled: Boolean(campaign.scheduleEnabled),
     scheduleHourUtc: Number(campaign.scheduleHourUtc ?? 9),
     scheduleMinuteUtc: Number(campaign.scheduleMinuteUtc ?? 0),
+    scheduledAt: Number(campaign.scheduledAt || 0),
+    deliveryRatePerMinute: Number(campaign.deliveryRatePerMinute || 6),
     lastScheduledDateKey: String(campaign.lastScheduledDateKey || ''),
   }
 }
@@ -354,6 +364,13 @@ function statusTone(status: string) {
   if (normalized === 'failed' || normalized === 'archived' || normalized === 'paused') return 'is-bad'
   if (normalized === 'queued' || normalized === 'sending' || normalized === 'pending') return 'is-warn'
   return ''
+}
+
+function toLocalDateTimeInput(value?: number) {
+  if (!value) return ''
+  const date = new Date(value)
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
 }
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -412,6 +429,7 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
   const [userSort, setUserSort] = useState<UserSort>('created_desc')
   const [userPage, setUserPage] = useState(1)
   const [messageSearch, setMessageSearch] = useState('')
+  const [messageFilter, setMessageFilter] = useState<MessageFilter>('all')
   const [messagePage, setMessagePage] = useState(1)
   const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetail | null>(null)
   const [loadingUserDetail, setLoadingUserDetail] = useState(false)
@@ -454,11 +472,12 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
     setUsers(data)
   }
 
-  async function loadMessages(nextPage = messagePage, nextSearch = messageSearch) {
+  async function loadMessages(nextPage = messagePage, nextSearch = messageSearch, nextFilter = messageFilter) {
     const query = new URLSearchParams({
       page: String(nextPage),
       pageSize: '12',
       search: nextSearch,
+      status: nextFilter,
     })
     const data = await adminFetch<ContactMessageResponse>(`/api/admin/messages?${query.toString()}`)
     setMessagePage(data.page)
@@ -496,7 +515,7 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
       await Promise.all([
         loadOverview(),
         loadUsers(1, userSearch, userFilter, userSort),
-        loadMessages(1, messageSearch),
+        loadMessages(1, messageSearch, messageFilter),
         loadTemplates(),
         loadCampaigns(),
         loadQueue(),
@@ -721,6 +740,8 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
           scheduleEnabled: campaignEditor.kind === 'daily' ? campaignEditor.scheduleEnabled : false,
           scheduleHourUtc: campaignEditor.scheduleHourUtc,
           scheduleMinuteUtc: campaignEditor.scheduleMinuteUtc,
+          scheduledAt: campaignEditor.kind === 'daily' ? 0 : campaignEditor.scheduledAt,
+          deliveryRatePerMinute: campaignEditor.deliveryRatePerMinute,
           lastScheduledDateKey: campaignEditor.lastScheduledDateKey,
         }),
       })
@@ -815,6 +836,16 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
       onNotify?.(action === 'pause' ? 'Campaign paused.' : 'Campaign resumed.')
     } catch (error) {
       onNotify?.(String((error as Error)?.message || 'Campaign update failed'))
+    }
+  }
+
+  async function updateQueueJob(job: QueueJob, action: 'retry' | 'cancel') {
+    try {
+      await adminFetch(`/api/admin/queue/${encodeURIComponent(normalizeId(job))}/${action}`, { method: 'POST' })
+      await Promise.all([loadQueue(), loadCampaigns(), loadOverview()])
+      onNotify?.(action === 'retry' ? 'Email returned to the queue.' : 'Queued email cancelled.')
+    } catch (error) {
+      onNotify?.(String((error as Error)?.message || 'Queue update failed'))
     }
   }
 
@@ -1144,11 +1175,32 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                 className="login-btn"
                 onClick={() => {
                   setMessagePage(1)
-                  void loadMessages(1, messageSearch)
+                  void loadMessages(1, messageSearch, messageFilter)
                 }}
               >
                 Search
               </button>
+            </div>
+            <div className="admin-mail-folders" aria-label="Inbox folders">
+              {([
+                ['all', 'All mail'],
+                ['new', 'Unread'],
+                ['replied', 'Sent replies'],
+                ['archived', 'Archive'],
+              ] as Array<[MessageFilter, string]>).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={messageFilter === value ? 'active' : ''}
+                  onClick={() => {
+                    setMessageFilter(value)
+                    setMessagePage(1)
+                    void loadMessages(1, messageSearch, value)
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <div className="admin-message-layout">
               <div className="admin-list">
@@ -1191,7 +1243,7 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                     onClick={() => {
                       const nextPage = Math.max(1, messages.page - 1)
                       setMessagePage(nextPage)
-                      void loadMessages(nextPage)
+                      void loadMessages(nextPage, messageSearch, messageFilter)
                     }}
                   >
                     Previous
@@ -1204,7 +1256,7 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                     onClick={() => {
                       const nextPage = Math.min(messages.totalPages, messages.page + 1)
                       setMessagePage(nextPage)
-                      void loadMessages(nextPage)
+                      void loadMessages(nextPage, messageSearch, messageFilter)
                     }}
                   >
                     Next
@@ -1335,7 +1387,9 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                     >
                       <option value="selected">Selected users</option>
                       <option value="one">One user</option>
-                      <option value="all">All users</option>
+                      <option value="verified">All verified users</option>
+                      <option value="unverified">All unverified users</option>
+                      <option value="all">All verified users (legacy)</option>
                     </select>
                   </label>
                   <label>
@@ -1363,7 +1417,7 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                   </div>
                 </div>
 
-                {campaignEditor.targetMode !== 'all' && (
+                {(campaignEditor.targetMode === 'selected' || campaignEditor.targetMode === 'one') && (
                   <label>
                     Recipients
                     <textarea
@@ -1446,12 +1500,48 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                   </div>
                 )}
 
+                <div className="admin-field-grid">
+                  {campaignEditor.kind !== 'daily' && (
+                    <label>
+                      Start sending
+                      <input
+                        type="datetime-local"
+                        value={toLocalDateTimeInput(campaignEditor.scheduledAt)}
+                        onChange={(event) =>
+                          setCampaignEditor((current) => ({
+                            ...current,
+                            scheduledAt: event.target.value ? new Date(event.target.value).getTime() : 0,
+                          }))
+                        }
+                      />
+                    </label>
+                  )}
+                  <label>
+                    Emails per minute
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={campaignEditor.deliveryRatePerMinute}
+                      onChange={(event) =>
+                        setCampaignEditor((current) => ({
+                          ...current,
+                          deliveryRatePerMinute: Math.min(60, Math.max(1, Number(event.target.value || 1))),
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+
                 <div className="admin-template-hint">
                   Supported variables: <code>{'{{userName}}'}</code>, <code>{'{{username}}'}</code>, <code>{'{{email}}'}</code>, <code>{'{{signupDate}}'}</code>
                 </div>
 
                 <div className="admin-composer-note">
-                  Send now is for one-to-one or small-group email from the admin workspace. Bulk delivery should still use queue send so provider limits stay safe.
+                  Queue send spaces delivery at {campaignEditor.deliveryRatePerMinute} email{campaignEditor.deliveryRatePerMinute === 1 ? '' : 's'} per minute
+                  {campaignEditor.scheduledAt && campaignEditor.kind !== 'daily'
+                    ? ` beginning ${formatDateTime(campaignEditor.scheduledAt)}.`
+                    : ' beginning as soon as the worker is available.'}
                 </div>
 
                 <div className="admin-inline-actions wrap">
@@ -1485,8 +1575,13 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                 <div className="admin-preview-meta">
                   <span>Target: {campaignEditor.targetMode}</span>
                   <span>
-                    Recipients: {campaignEditor.targetMode === 'all' ? 'all verified users' : parseRecipients(campaignEditor.selectedRecipients).length || 0}
+                    Recipients: {campaignEditor.targetMode === 'all' || campaignEditor.targetMode === 'verified'
+                      ? 'all verified users'
+                      : campaignEditor.targetMode === 'unverified'
+                        ? 'all unverified users'
+                        : parseRecipients(campaignEditor.selectedRecipients).length || 0}
                   </span>
+                  <span>Rate: {campaignEditor.deliveryRatePerMinute}/min</span>
                 </div>
                 {previewSubject ? (
                   <>
@@ -1683,6 +1778,18 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
                     <div className="admin-list-meta">
                       <span className={`admin-status-pill ${statusTone(job.status)}`}>{job.status}</span>
                       <small>{formatDateTime(job.sentAt || job.nextAttemptAt || job.createdAt)}</small>
+                      <div className="admin-inline-actions">
+                        {job.status === 'failed' && (
+                          <button type="button" className="ghost-btn" onClick={() => void updateQueueJob(job, 'retry')}>
+                            Retry
+                          </button>
+                        )}
+                        {(job.status === 'pending' || job.status === 'failed') && (
+                          <button type="button" className="ghost-btn" onClick={() => void updateQueueJob(job, 'cancel')}>
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </article>
                 ))
