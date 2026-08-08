@@ -37,3 +37,7 @@ services:
         sync: false
       - key: WEEKLY_WELLNESS_EMAILS_MINUTE_UTC
         sync: false
+      - key: KEEP_ALIVE_ENABLED
+        value: "true"
+      - key: KEEP_ALIVE_URL
+        value: https://zenflow.bio

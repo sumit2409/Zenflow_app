@@ -140,6 +140,19 @@ Optional auth environment variables:
 - `WEEKLY_WELLNESS_EMAILS_DAY_UTC` (`0-6`, where `1` is Monday; default `1`)
 - `WEEKLY_WELLNESS_EMAILS_HOUR_UTC` (`0-23`; default `9`)
 - `WEEKLY_WELLNESS_EMAILS_MINUTE_UTC` (`0-59`; default `0`)
+- `KEEP_ALIVE_ENABLED` (`true` enables the optional Render keep-alive request)
+- `KEEP_ALIVE_URL` (the public Render or custom-domain URL to ping every 14 minutes)
+
+To reduce idle spin-down on a Render Free web service, set:
+
+```text
+KEEP_ALIVE_ENABLED=true
+KEEP_ALIVE_URL=https://zenflow.bio
+```
+
+The backend will request `KEEP_ALIVE_URL/health` every 14 minutes. This only
+addresses idle spin-down; Render can still restart or suspend a free service,
+and its monthly free-instance-hour and bandwidth limits still apply.
 
 If `GOOGLE_CLIENT_ID` is set, the login screen shows Google Sign-In. If the SMTP settings are set, Zenflow can email password reset codes and recovery links.
 If `RESEND_API_KEY` and `RESEND_FROM` are set, password reset emails are sent via Resend API first, with SMTP as fallback.
@@ -150,6 +163,89 @@ After redeploy, the same Render URL works for both:
 
 - website: `https://your-render-service.onrender.com`
 - API: `https://your-render-service.onrender.com/api/...`
+
+## Google Cloud Run deploy (free-tier friendly)
+
+Cloud Run can host the frontend and API as one service using the included
+`Dockerfile`. The following settings allow scale-to-zero and cap the service at
+one instance, which keeps light usage within Cloud Run's monthly free allowance
+in supported billing accounts and regions. A billing account is still required,
+and usage beyond Google's allowance is chargeable.
+
+Prerequisites:
+
+- a Google Cloud project with billing enabled
+- the Google Cloud CLI (`gcloud`) installed and authenticated
+- a reachable MongoDB deployment; Cloud Run's local filesystem is temporary
+
+From the repository root, select the project and enable the required APIs:
+
+```bash
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+```
+
+Deploy from source. `europe-west1` (Belgium) is used because it is close to the
+app's current Europe/Paris location and is a standard Cloud Run pricing region:
+
+```bash
+gcloud run deploy zenflow-app \
+  --source . \
+  --region europe-west1 \
+  --allow-unauthenticated \
+  --port 8080 \
+  --cpu 1 \
+  --memory 512Mi \
+  --min 0 \
+  --max 1 \
+  --concurrency 80 \
+  --set-env-vars NODE_ENV=production \
+  --set-env-vars MONGODB_URI='YOUR_MONGODB_URI' \
+  --set-env-vars ZENFLOW_SECRET='A_LONG_RANDOM_SECRET'
+```
+
+On PowerShell, replace each trailing `\` with a backtick, or enter the command
+on one line. For a production deployment, store `MONGODB_URI` and
+`ZENFLOW_SECRET` in Secret Manager and attach them with `--set-secrets` instead
+of leaving them in shell history.
+
+The app redirects production traffic to `PUBLIC_APP_URL`. After the first
+deploy, get the generated service URL and set it as the public URL if the Cloud
+Run address should be directly browsable:
+
+```bash
+SERVICE_URL=$(gcloud run services describe zenflow-app --region europe-west1 --format='value(status.url)')
+gcloud run services update zenflow-app --region europe-west1 --update-env-vars PUBLIC_APP_URL="$SERVICE_URL"
+```
+
+PowerShell equivalent:
+
+```powershell
+$serviceUrl = gcloud run services describe zenflow-app --region europe-west1 --format="value(status.url)"
+gcloud run services update zenflow-app --region europe-west1 --update-env-vars "PUBLIC_APP_URL=$serviceUrl"
+```
+
+Verify the deployment:
+
+```bash
+curl "$SERVICE_URL/health"
+```
+
+Expected storage is `mongodb`. Do not use the development JSON-file fallback on
+Cloud Run because container files do not persist across restarts.
+
+Cost and scheduling notes:
+
+- Keep minimum instances at `0`; setting it to `1` can create idle-instance cost.
+- Cloud Build and Artifact Registry also have their own quotas and pricing. Delete
+  old container images periodically if their stored size grows beyond their free
+  allowances.
+- The in-process weekly email and queue timers are not reliable while the service
+  is scaled to zero. Keep `WEEKLY_WELLNESS_EMAILS_ENABLED=false` and use Cloud
+  Scheduler to call the protected admin endpoint if guaranteed schedules are
+  required; Scheduler may add a small charge outside its own allowance.
+- MongoDB is external to Cloud Run and has separate limits and pricing.
 
 ## Website analytics with GA4
 

@@ -16,6 +16,9 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/zenflo
 const isProduction = process.env.NODE_ENV === 'production'
 const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || '').trim()
 const PUBLIC_APP_URL = String(process.env.PUBLIC_APP_URL || '').trim().replace(/\/+$/, '')
+const KEEP_ALIVE_ENABLED = String(process.env.KEEP_ALIVE_ENABLED || '').trim() === 'true'
+const KEEP_ALIVE_URL = String(process.env.KEEP_ALIVE_URL || PUBLIC_APP_URL || '').trim().replace(/\/+$/, '')
+const KEEP_ALIVE_INTERVAL_MS = 14 * 60 * 1000
 const SMTP_HOST = String(process.env.SMTP_HOST || '').trim()
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587)
 const SMTP_SECURE = String(process.env.SMTP_SECURE || '').trim() === 'true'
@@ -71,12 +74,68 @@ let weeklyWellnessInterval = null
 let weeklyWellnessJobRunning = false
 let emailQueueInterval = null
 let emailQueueRunning = false
+let keepAliveInterval = null
 let cachedIndexHtml = null
 
 function clampIntegerEnv(rawValue, fallback, min, max) {
   const parsed = Number(rawValue)
   if (!Number.isFinite(parsed)) return fallback
   return Math.min(max, Math.max(min, Math.floor(parsed)))
+}
+
+function getKeepAliveHealthUrl() {
+  if (!KEEP_ALIVE_ENABLED || !KEEP_ALIVE_URL) return null
+
+  try {
+    const url = new URL(KEEP_ALIVE_URL)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
+    if (['localhost', '127.0.0.1', '::1'].includes(url.hostname.toLowerCase())) return null
+    url.pathname = '/health'
+    url.search = ''
+    url.hash = ''
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
+async function pingKeepAliveEndpoint(url) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'user-agent': 'zenflow-render-keep-alive/1.0' },
+      signal: controller.signal,
+    })
+    await response.arrayBuffer()
+
+    if (!response.ok) {
+      console.warn(`[keep-alive] ${url} returned HTTP ${response.status}`)
+    }
+  } catch (error) {
+    console.warn(`[keep-alive] request failed: ${error.message}`)
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+function startKeepAliveScheduler() {
+  if (keepAliveInterval) return
+
+  const healthUrl = getKeepAliveHealthUrl()
+  if (!healthUrl) {
+    if (KEEP_ALIVE_ENABLED) {
+      console.warn('[keep-alive] enabled, but KEEP_ALIVE_URL or PUBLIC_APP_URL is not a valid public URL')
+    }
+    return
+  }
+
+  console.log(`[keep-alive] pinging ${healthUrl} every 14 minutes`)
+  keepAliveInterval = setInterval(() => {
+    void pingKeepAliveEndpoint(healthUrl)
+  }, KEEP_ALIVE_INTERVAL_MS)
 }
 
 const DEFAULT_PUBLIC_META = {
@@ -4761,6 +4820,7 @@ const DEFAULT_PORT = Number(process.env.PORT || 4100)
 function startServer(port) {
   const server = app.listen(port, () => {
     console.log('Zenflow server running on', port)
+    startKeepAliveScheduler()
   })
 
   server.on('error', (error) => {
