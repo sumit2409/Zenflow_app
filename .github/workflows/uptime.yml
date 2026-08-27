@@ -16,6 +16,8 @@ jobs:
   health:
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    env:
+      UPTIME_ALERT_WEBHOOK: ${{ secrets.UPTIME_ALERT_WEBHOOK }}
     steps:
       - name: Verify canonical health endpoint
         shell: bash
@@ -27,7 +29,5 @@ jobs:
             https://zenflow.bio/api/health
           test "$(tr -d '[:space:]' < /tmp/health.json)" = '{"status":"ok"}'
       - name: Alert after failure
-        if: failure() && secrets.UPTIME_ALERT_WEBHOOK != ''
-        env:
-          ALERT_WEBHOOK: ${{ secrets.UPTIME_ALERT_WEBHOOK }}
-        run: curl --fail --silent --show-error --max-time 10 -X POST -H 'Content-Type: application/json' --data '{"text":"Zenflow health check failed. Review the GitHub Actions uptime workflow."}' "$ALERT_WEBHOOK"
+        if: ${{ failure() && env.UPTIME_ALERT_WEBHOOK != '' }}
+        run: curl --fail --silent --show-error --max-time 10 -X POST -H 'Content-Type: application/json' --data '{"text":"Zenflow health check failed. Review the GitHub Actions uptime workflow."}' "$UPTIME_ALERT_WEBHOOK"
