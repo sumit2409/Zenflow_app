@@ -313,3 +313,38 @@ npm run apk:debug
 APK output:
 
 - `client/android/app/build/outputs/apk/debug/app-debug.apk`
+# Health and uptime
+
+The public liveness endpoint is `GET https://zenflow.bio/api/health`. It returns only HTTP 200 and `{"status":"ok"}`; it does not query the database or accept cookies. Render uses this route directly. `.github/workflows/uptime.yml` runs a persistent check every 10 minutes with a 12-second timeout and two limited retries. GitHub records failed runs; set the optional repository secret `UPTIME_ALERT_WEBHOOK` to send the repeated workflow failure to an external alert receiver. Confirm that this monitoring complies with the selected hosting plan rather than using it to evade intentional suspension rules.
+
+Temporary local shell check (stops when the shell closes):
+
+```bash
+while true; do
+  date
+  curl --fail --silent --show-error https://zenflow.bio/api/health
+  sleep 600
+done
+```
+
+PowerShell:
+
+```powershell
+while ($true) {
+  Get-Date
+  Invoke-RestMethod -Uri 'https://zenflow.bio/api/health' -TimeoutSec 12
+  Start-Sleep -Seconds 600
+}
+```
+
+Windows Command Prompt:
+
+```bat
+:health
+echo %date% %time%
+curl.exe --fail --silent --show-error https://zenflow.bio/api/health
+timeout /t 600 /nobreak >nul
+goto health
+```
+
+See `docs/REDESIGN_AUDIT.md` for the architecture audit, preservation checklist, and release risks.

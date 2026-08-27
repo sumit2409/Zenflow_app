@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import type { AuthAccount } from '../types/auth'
+import { getConsent } from './preferences'
 
 const GA_MEASUREMENT_ID = 'G-B0H2J0ZX9T'
 const ENABLE_IN_DEV = String(import.meta.env.VITE_ENABLE_ANALYTICS_IN_DEV || '').trim() === 'true'
@@ -25,7 +26,7 @@ declare global {
 }
 
 function analyticsAvailable() {
-  return Boolean(GA_MEASUREMENT_ID) && (!import.meta.env.DEV || ENABLE_IN_DEV)
+  return getConsent()?.choice === 'all' && Boolean(GA_MEASUREMENT_ID) && (!import.meta.env.DEV || ENABLE_IN_DEV)
 }
 
 function getPlatformLabel() {
@@ -65,10 +66,26 @@ function buildTrackingUrl(path: string) {
 
 export function initAnalytics() {
   if (!analyticsAvailable() || initialized) return
-  if (typeof window.gtag !== 'function') return
-
+  window.dataLayer = window.dataLayer || []
+  window.gtag = window.gtag || function (...args: any[]) { window.dataLayer.push(args) }
+  const script = document.createElement('script')
+  script.async = true
+  script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`
+  script.dataset.zenflowAnalytics = 'true'
+  document.head.appendChild(script)
+  sendAnalyticsCommand('js', new Date())
+  sendAnalyticsCommand('config', GA_MEASUREMENT_ID, { send_page_view: false, anonymize_ip: true })
   initialized = true
 }
+
+window.addEventListener('zenflow:consent', () => {
+  if (getConsent()?.choice === 'all') initAnalytics()
+  else {
+    sendAnalyticsCommand('consent', 'update', { analytics_storage: 'denied', ad_storage: 'denied' })
+    document.querySelectorAll('script[data-zenflow-analytics]').forEach((node) => node.remove())
+    initialized = false
+  }
+})
 
 export function identifyAnalyticsUser(account: AuthAccount) {
   if (!analyticsAvailable() || !initialized) return

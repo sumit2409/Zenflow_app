@@ -2072,13 +2072,22 @@ const app = express()
 app.use(cors())
 app.use(bodyParser.json())
 
-app.get('/health', (req, res) => {
-  res.json({
-    ok: true,
-    storage: useFileStorage ? 'file' : 'mongodb',
-    mongoReadyState: mongoose.connection.readyState,
-  })
-})
+const healthRequests = new Map()
+function healthRateLimit(req, res, next) {
+  const key = req.ip || req.socket.remoteAddress || 'unknown'
+  const now = Date.now()
+  const current = healthRequests.get(key)
+  if (!current || now - current.startedAt > 60000) healthRequests.set(key, { startedAt: now, count: 1 })
+  else if (++current.count > 60) return res.status(429).json({ status: 'rate_limited' })
+  if (healthRequests.size > 1000) healthRequests.clear()
+  next()
+}
+const publicHealth = (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  res.status(200).json({ status: 'ok' })
+}
+app.get('/api/health', healthRateLimit, publicHealth)
+app.get('/health', healthRateLimit, publicHealth)
 
 app.get('/download/android', async (req, res) => {
   const targetUrl = APK_DOWNLOAD_URL || DEFAULT_APK_FALLBACK_URL
@@ -4777,7 +4786,7 @@ if (process.env.NODE_ENV === 'production') {
 
   app.use((req, res, next) => {
     if (!['GET', 'HEAD'].includes(req.method)) return next()
-    if (req.path === '/health' || req.path.startsWith('/api/')) return next()
+    if (req.path === '/health' || req.path === '/api/health' || req.path.startsWith('/api/')) return next()
 
     const requestProtocol = getRequestProtocol(req)
     const requestHostname = getRequestHostname(req)

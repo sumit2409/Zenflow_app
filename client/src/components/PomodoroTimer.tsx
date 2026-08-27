@@ -22,6 +22,7 @@ type Phase = 'work' | 'break'
 
 const DURATION_OPTIONS = [25, 50, 90]
 const BONUS_POINTS_PER_TARGET = 120
+const ACTIVE_SESSION_KEY = 'zenflow_focus_session'
 
 export default function PomodoroTimer({ user, token, initialTaskId, onRequireLogin, onSelect, onSessionComplete }: Props) {
   const [phase, setPhase] = useState<Phase>('work')
@@ -45,6 +46,43 @@ export default function PomodoroTimer({ user, token, initialTaskId, onRequireLog
   const lastTickRef = useRef<number | null>(null)
   const phaseRef = useRef<Phase>('work')
   const completedRef = useRef(false)
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(ACTIVE_SESSION_KEY) || 'null')
+      if (!saved || !saved.phase || !Number.isFinite(saved.seconds)) return
+      const remaining = saved.running && saved.endAt
+        ? Math.max(0, Math.ceil((Number(saved.endAt) - Date.now()) / 1000))
+        : Number(saved.seconds)
+      setPhase(saved.phase === 'break' ? 'break' : 'work')
+      setWorkMinutes(Number(saved.workMinutes) || 25)
+      setBreakMinutes(Number(saved.breakMinutes) || 5)
+      setSelectedTaskId(String(saved.selectedTaskId || ''))
+      setSeconds(remaining)
+      setRunning(Boolean(saved.running && remaining > 0))
+      setStatusNote(saved.running ? 'Your active session was restored.' : 'Your paused session was restored.')
+    } catch { localStorage.removeItem(ACTIVE_SESSION_KEY) }
+  }, [])
+
+  useEffect(() => {
+    if (seconds <= 0 && !running) return
+    localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify({
+      phase, workMinutes, breakMinutes, selectedTaskId, seconds, running,
+      endAt: running ? Date.now() + seconds * 1000 : null,
+    }))
+    document.title = running ? `${formatTime(seconds)} · ${phase === 'work' ? 'Focus' : 'Break'} — Zenflow` : 'Focus — Zenflow'
+    return () => { document.title = 'Focus — Zenflow' }
+  }, [phase, workMinutes, breakMinutes, selectedTaskId, seconds, running])
+
+  useEffect(() => {
+    const protect = (event: BeforeUnloadEvent) => {
+      if (!running) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', protect)
+    return () => window.removeEventListener('beforeunload', protect)
+  }, [running])
 
   useEffect(() => {
     if (!initialTaskId) return
@@ -117,6 +155,7 @@ export default function PomodoroTimer({ user, token, initialTaskId, onRequireLog
   useEffect(() => {
     if (seconds > 0) completedRef.current = false
     if (seconds <= 0) setRunning(false)
+    if (seconds <= 0) localStorage.removeItem(ACTIVE_SESSION_KEY)
   }, [seconds])
 
   async function persistTodos(nextTodos: TodoItem[]) {

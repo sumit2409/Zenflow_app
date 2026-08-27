@@ -18,6 +18,7 @@ import { apiUrl } from './utils/api'
 import { identifyAnalyticsUser, resetAnalyticsUser, trackLogin, trackPageView } from './utils/analytics'
 import type { ProfileMeta } from './utils/profile'
 import PlannerBoard from './components/PlannerBoard'
+import CookieConsent from './components/CookieConsent'
 import { schedulePlannerNotifications } from './utils/planner'
 import { todayKey } from './utils/wellness'
 import {
@@ -282,14 +283,12 @@ export default function App() {
   const publicShellMode = !account && (!selected || isPublicToolSelected)
   const isToolSelected = Boolean(selected && toolViews.includes(selected as (typeof toolViews)[number]))
   const desktopNavItems: Array<{ id: string | null; label: string }> = [
-    { id: null, label: 'Dashboard' },
-    { id: 'pomodoro', label: 'Focus Timer' },
-    { id: 'meditation', label: 'Meditation' },
-    { id: 'sudoku', label: 'Sudoku' },
-    { id: 'arcade', label: 'Games' },
-    ...(BREAK_ROOM_ENABLED ? [{ id: 'breakroom', label: 'Break Room' }] : []),
-    { id: 'cv', label: 'CV Maker' },
+    { id: null, label: 'Today' },
     { id: 'planner', label: 'Planner' },
+    { id: 'pomodoro', label: 'Focus' },
+    { id: 'breakroom', label: 'Reset' },
+    { id: 'progress', label: 'Progress' },
+    { id: 'profile', label: 'More' },
     ...(account?.isAdmin ? [{ id: 'admin', label: 'Admin' }] : []),
   ]
   const visibleDesktopNav = desktopNavItems.filter((item) => item.label.toLowerCase().includes(navSearch.trim().toLowerCase()))
@@ -343,7 +342,7 @@ export default function App() {
     navigatePublicPage(null)
   }
 
-  function openLandingSection(sectionId: 'start' | 'plans' | 'overview' | 'about') {
+  function openLandingSection(sectionId: 'start' | 'product' | 'how-it-works') {
     setSelected(null)
     setFocusedTaskId(null)
     setGoalIntent(null)
@@ -580,7 +579,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (selected === 'pomodoro' || selected === 'meditation' || selected === 'sudoku' || selected === 'arcade' || selected === 'breakroom' || selected === 'cv') {
+    if (selected === 'pomodoro' || selected === 'meditation' || selected === 'sudoku' || selected === 'arcade' || selected === 'breakroom') {
       setLastToolView(selected)
     }
   }, [selected])
@@ -593,6 +592,7 @@ export default function App() {
     breakroom: 'Break Room — Zenflow',
     cv: 'CV Maker — Zenflow',
     planner: 'Planner — Zenflow',
+    progress: 'Progress — Zenflow',
     profile: 'Account — Zenflow',
     admin: 'Admin — Zenflow',
   }
@@ -608,8 +608,8 @@ export default function App() {
       applyDocumentMeta('Dashboard — Zenflow', 'Zenflow dashboard with your account, planner, and progress in one place.', '/app/dashboard')
     } else {
       applyDocumentMeta(
-        'Zenflow | Focus, Tasks, and Daily Rhythm',
-        'Zenflow combines focus timers, planner tools, daily notes, calm breaks, and public focus articles in one clean flow.',
+        'Zenflow | Plan, focus, and reset',
+        'Plan what matters, focus deeply, and reset intentionally in one calm workspace.',
         '/',
       )
     }
@@ -823,7 +823,7 @@ export default function App() {
           <div className="brand-dot" aria-hidden />
           <div>
             <div className="brand">Zenflow</div>
-            <div className="brand-sub">Focus, meditation, sudoku, and quick games</div>
+            <div className="brand-sub">Plan · Focus · Reset</div>
           </div>
         </button>
         <nav className="nav" aria-label="Main navigation">
@@ -839,16 +839,10 @@ export default function App() {
             )
           ) : (
             <>
-              <button type="button" className={`nav-link ${!selected && !activePublicPage ? 'active' : ''}`} onClick={() => openLandingSection('start')}>Home</button>
-              <button type="button" className={`nav-link ${selected === 'pomodoro' ? 'active' : ''}`} onClick={() => setView('pomodoro')}>Focus</button>
-              <button type="button" className={`nav-link ${selected === 'meditation' ? 'active' : ''}`} onClick={() => setView('meditation')}>Meditate</button>
-              <button type="button" className={`nav-link ${selected === 'sudoku' ? 'active' : ''}`} onClick={() => setView('sudoku')}>Sudoku</button>
-              <button type="button" className={`nav-link ${selected === 'arcade' ? 'active' : ''}`} onClick={() => setView('arcade')}>Games</button>
-              <button type="button" className={`nav-link ${selected === 'cv' ? 'active' : ''}`} onClick={() => setView('cv')}>CV Maker</button>
-              <button type="button" className="nav-link" onClick={() => openLandingSection('plans')}>Features</button>
-              <button type="button" className="nav-link" onClick={() => openLandingSection('overview')}>Overview</button>
-              <button type="button" className={`nav-link ${blogRouteActive ? 'active' : ''}`} onClick={openBlogIndex}>Blog</button>
-              <button type="button" className="nav-link" onClick={() => openLandingSection('about')}>About</button>
+              <button type="button" className="nav-link" onClick={() => openLandingSection('product')}>Product</button>
+              <button type="button" className="nav-link" onClick={() => openLandingSection('how-it-works')}>How it works</button>
+              <button type="button" className={`nav-link ${blogRouteActive ? 'active' : ''}`} onClick={openBlogIndex}>Resources</button>
+              <button type="button" className="nav-link" onClick={() => openStaticPage('about')}>About</button>
             </>
           )}
         </nav>
@@ -883,8 +877,8 @@ export default function App() {
             </>
           ) : (
             <>
-              <button className="login-btn" onClick={() => openAuth('login')}>Login</button>
-              <button className="primary-cta auth-cta" onClick={() => openAuth('register')}>Create account</button>
+              <button className="login-btn" onClick={() => openAuth('login')}>Log in</button>
+              <button className="primary-cta auth-cta" onClick={() => openAuth('register')}>Start free</button>
             </>
           )}
         </div>
@@ -919,28 +913,16 @@ export default function App() {
                 <section className="hero fade-rise">
                   <div className="hero-inner">
                     <div className="hero-copy">
-                      <div className="eyebrow">Personal dashboard</div>
-                      <h1>Keep your focus tools, notes, and games in one place.</h1>
-                      <p className="lead">Track work sessions, meditation time, sudoku progress, and quick memory or reaction drills without jumping between apps.</p>
+                      <div className="eyebrow">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+                      <h1>What matters today, {account.fullName.split(' ')[0]}?</h1>
+                      <p className="lead">Choose the next useful step, then give it your full attention.</p>
                       <div className="hero-tags">
-                        <span>Session history</span>
-                        <span>Task tracking</span>
-                        <span>Game progress</span>
+                        <span>Plan gently</span><span>Focus clearly</span><span>Reset intentionally</span>
                       </div>
                     </div>
                     <div className="hero-panel">
-                      <div className="hero-stat">
-                        <strong>01</strong>
-                        <span>Start with your daily note and key tasks.</span>
-                      </div>
-                      <div className="hero-stat">
-                        <strong>02</strong>
-                        <span>Run a focus session, meditation timer, or quick game.</span>
-                      </div>
-                      <div className="hero-stat">
-                        <strong>03</strong>
-                        <span>Review progress, streaks, and account details in one screen.</span>
-                      </div>
+                      <button className="today-primary-action" onClick={() => setView('pomodoro')}><span>Start focus</span><strong>25 min</strong></button>
+                      <button className="ghost-btn" onClick={() => setView('planner')}>Choose today’s priorities</button>
                     </div>
                   </div>
                 </section>
@@ -1064,6 +1046,7 @@ export default function App() {
                 onMetaSaved={() => setProfileRefreshKey((value) => value + 1)}
               />
             )}
+            {selected === 'progress' && <Dashboard onSelect={(id: string) => setView(id)} onOpenPlannerDate={openPlannerAt} user={user} token={token} />}
             {selected === 'profile' && (
               <ProfileCenter
                 user={user}
@@ -1122,20 +1105,20 @@ export default function App() {
         />
       )}
       <nav className="bottom-nav" aria-label="Primary navigation">
-        <button className={`bottom-nav-item ${!account && selected === null ? 'active' : ''}`} onClick={() => handleBottomNav('home')}>
-          <span>Home</span>
+        <button className={`bottom-nav-item ${selected === null ? 'active' : ''}`} onClick={() => setView(null)}>
+          <span>Today</span>
         </button>
-        <button className={`bottom-nav-item ${account && selected === null ? 'active' : ''}`} onClick={() => handleBottomNav('dashboard')}>
-          <span>Dashboard</span>
+        <button className={`bottom-nav-item ${selected === 'planner' ? 'active' : ''}`} onClick={() => setView('planner')}>
+          <span>Planner</span>
         </button>
-        <button className={`bottom-nav-item ${isToolSelected ? 'active' : ''}`} onClick={() => handleBottomNav('tools')}>
-          <span>Tools</span>
+        <button className={`bottom-nav-item ${selected === 'pomodoro' ? 'active' : ''}`} onClick={() => setView('pomodoro')}>
+          <span>Focus</span>
         </button>
-        <button className={`bottom-nav-item ${selected === 'planner' ? 'active' : ''}`} onClick={() => handleBottomNav('activity')}>
-          <span>Activity</span>
+        <button className={`bottom-nav-item ${['breakroom','meditation','sudoku','arcade'].includes(selected || '') ? 'active' : ''}`} onClick={() => setView('breakroom')}>
+          <span>Reset</span>
         </button>
-        <button className={`bottom-nav-item ${selected === 'profile' || selected === 'admin' ? 'active' : ''}`} onClick={() => handleBottomNav('profile')}>
-          <span>Profile</span>
+        <button className={`bottom-nav-item ${selected === 'progress' ? 'active' : ''}`} onClick={() => setView('progress')}>
+          <span>Progress</span>
         </button>
       </nav>
       {toastMsg && (
@@ -1143,6 +1126,7 @@ export default function App() {
           {toastMsg}
         </div>
       )}
+      <CookieConsent onOpenPolicy={() => openStaticPage('cookie')} />
     </div>
   )
 }
