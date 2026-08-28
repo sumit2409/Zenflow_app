@@ -1,6 +1,6 @@
 :root {
-  --bg-cream: #f7f7f5;
-  --bg-sand: #e9e6de;
+  --bg-cream: #eeece7;
+  --bg-sand: #ddd8ce;
   --bg-clay: #191919;
   --bg-mist: #ffffff;
   --ink: #191919;
@@ -33,8 +33,8 @@
 }
 
 :root[data-theme='forest'] {
-  --bg-cream: #e8efe6;
-  --bg-sand: #c7d8c3;
+  --bg-cream: #dce7da;
+  --bg-sand: #b9cdb5;
   --bg-clay: #6f8a66;
   --bg-mist: #f4f8f2;
   --ink: #213126;
@@ -49,8 +49,8 @@
 }
 
 :root[data-theme='ocean'] {
-  --bg-cream: #e6eef4;
-  --bg-sand: #cadce8;
+  --bg-cream: #d9e6ef;
+  --bg-sand: #bcd2e0;
   --bg-clay: #5e88a5;
   --bg-mist: #f4f8fb;
   --ink: #203245;
@@ -65,8 +65,8 @@
 }
 
 :root[data-theme='sunset'] {
-  --bg-cream: #f5e6df;
-  --bg-sand: #ebcbc0;
+  --bg-cream: #ead8d0;
+  --bg-sand: #dfbdb1;
   --bg-clay: #c57c6c;
   --bg-mist: #fcf5f1;
   --ink: #3b2624;
@@ -97,10 +97,19 @@ body {
   color: var(--ink);
   font-family: 'Manrope', sans-serif;
   font-size: 16px;
+  font-weight: 500;
   line-height: 1.6;
   overflow-x: hidden;
   min-width: 320px;
-  background: #f7f7f5;
+  background-color: var(--bg-cream);
+  background-image:
+    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--sage) 22%, transparent) 0, transparent 34%),
+    radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--amber) 20%, transparent) 0, transparent 30%),
+    radial-gradient(circle at 62% 88%, color-mix(in srgb, var(--sage) 14%, transparent) 0, transparent 38%),
+    linear-gradient(145deg, var(--bg-cream), var(--bg-sand));
+  background-attachment: fixed;
+  background-size: 140% 140%, 135% 135%, 150% 150%, 100% 100%;
+  animation: ambientBackground 24s ease-in-out infinite alternate;
 }
 
 body::before {
@@ -109,11 +118,11 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(25, 25, 25, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(25, 25, 25, 0.035) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: radial-gradient(circle at center, black, transparent 80%);
-  opacity: 0.25;
+  opacity: 0.65;
 }
 
 body::after {
@@ -152,26 +161,47 @@ main > * {
 
 h1 {
   font-size: 32px;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.5;
 }
 
 h2 {
   font-size: 24px;
-  font-weight: 600;
+  font-weight: 750;
   line-height: 1.5;
 }
 
 h3 {
   font-size: 18px;
-  font-weight: 500;
+  font-weight: 700;
   line-height: 1.6;
 }
 
 .caption,
 small {
   font-size: 14px;
+  font-weight: 600;
   line-height: 1.6;
+}
+
+strong,
+b {
+  font-weight: 800;
+}
+
+@keyframes ambientBackground {
+  0% {
+    background-position: 0% 0%, 100% 0%, 50% 100%, 0 0;
+  }
+  100% {
+    background-position: 12% 8%, 88% 14%, 58% 82%, 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
 }
 
 .app-header {
