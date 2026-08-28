@@ -315,7 +315,7 @@ APK output:
 - `client/android/app/build/outputs/apk/debug/app-debug.apk`
 # Health and uptime
 
-The public liveness endpoint is `GET https://zenflow.bio/api/health`. It returns only HTTP 200 and `{"status":"ok"}`; it does not query the database or accept cookies. Render uses this route directly. `.github/workflows/uptime.yml` runs a persistent check every 10 minutes with a 12-second timeout and two limited retries. GitHub records failed runs; set the optional repository secret `UPTIME_ALERT_WEBHOOK` to send the repeated workflow failure to an external alert receiver. Confirm that this monitoring complies with the selected hosting plan rather than using it to evade intentional suspension rules.
+The public liveness endpoint is `GET https://zenflow.bio/api/health`. It returns only HTTP 200 and `{"status":"ok"}`; it does not query the database or accept cookies. Render uses this route directly. Automated GitHub Actions uptime monitoring is not enabled.
 
 Temporary local shell check (stops when the shell closes):
 
