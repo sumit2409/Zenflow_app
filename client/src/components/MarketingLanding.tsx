@@ -61,7 +61,7 @@ export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
           </div>
         </section>
 
-        <section id="product" className={`zf-section zf-demo-section ${demo}`}>
+        <section id="product" className="zf-section zf-demo-section">
           <div className="zf-demo-copy"><span className="section-kicker">See the flow</span><h2>One workspace for the shape of your day.</h2><p>Each space is designed around one meaningful outcome—not a directory of tools.</p></div>
           <div className="zf-demo">
             <div className="zf-demo-tabs" role="tablist" aria-label="Product preview">
