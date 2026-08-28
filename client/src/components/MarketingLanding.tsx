@@ -9,9 +9,9 @@ type Props = {
 }
 
 const demos = {
-  today: { label: 'Today', kicker: 'Your day, made clear', title: 'Choose three priorities', detail: 'A short list keeps the next useful action visible.', action: 'Open planner' },
-  focus: { label: 'Focus', kicker: 'Protected attention', title: '25:00', detail: 'Work on one selected task, then pause intentionally.', action: 'Try focus' },
-  reset: { label: 'Reset', kicker: 'A better kind of break', title: 'What do you need?', detail: 'Choose calm, movement, energy, or a short mental reset.', action: 'Explore reset' },
+  today: { label: 'Today', tabDetail: 'Set your direction', kicker: 'Your day, made clear', title: 'Choose three priorities', detail: 'A short list keeps the next useful action visible.', action: 'Open planner' },
+  focus: { label: 'Focus', tabDetail: 'Protect your attention', kicker: 'Protected attention', title: '25:00', detail: 'Work on one selected task, then pause intentionally.', action: 'Try focus' },
+  reset: { label: 'Reset', tabDetail: 'Come back refreshed', kicker: 'A better kind of break', title: 'What do you need?', detail: 'Choose calm, movement, energy, or a short mental reset.', action: 'Explore reset' },
 } as const
 
 export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
@@ -43,7 +43,7 @@ export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
           <div className="zf-preview-body">
             <p className="section-kicker">What matters today?</p>
             <h2>Finish the work that needs a clear mind.</h2>
-            <div className="zf-priority"><span>1</span><p>Choose your first priority</p><em>Next</em></div>
+            <div className="zf-priority"><span>1</span><p>Choose your first priority</p><em>Start here</em></div>
             <div className="zf-priority"><span>2</span><p>Protect one focused block</p></div>
             <button className="zf-focus-button" onClick={() => onOpenTool('pomodoro')}><span>Start focus</span><strong>25 min</strong></button>
             <div className="zf-preview-foot"><span>0 min focused today</span><span>A little progress still counts.</span></div>
@@ -65,9 +65,24 @@ export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
           <div className="zf-demo-copy"><span className="section-kicker">See the flow</span><h2>One workspace for the shape of your day.</h2><p>Each space is designed around one meaningful outcome—not a directory of tools.</p></div>
           <div className="zf-demo">
             <div className="zf-demo-tabs" role="tablist" aria-label="Product preview">
-              {(Object.keys(demos) as Array<keyof typeof demos>).map((key) => <button key={key} role="tab" aria-selected={demo === key} className={demo === key ? 'active' : ''} onClick={() => setDemo(key)}>{demos[key].label}</button>)}
+              {(Object.keys(demos) as Array<keyof typeof demos>).map((key) => (
+                <button
+                  key={key}
+                  id={`zf-tab-${key}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={demo === key}
+                  aria-controls="zf-demo-panel"
+                  tabIndex={demo === key ? 0 : -1}
+                  className={`zf-visual-tab ${key} ${demo === key ? 'active' : ''}`}
+                  onClick={() => setDemo(key)}
+                >
+                  <span>{demos[key].label}</span>
+                  <small>{demos[key].tabDetail}</small>
+                </button>
+              ))}
             </div>
-            <div className={`zf-demo-canvas ${demo}`} role="tabpanel">
+            <div id="zf-demo-panel" className={`zf-demo-canvas ${demo}`} role="tabpanel" aria-labelledby={`zf-tab-${demo}`}>
               <span className="section-kicker">{active.kicker}</span><h3>{active.title}</h3><p>{active.detail}</p><button className="ghost-btn" onClick={openDemo}>{active.action} →</button>
             </div>
           </div>
