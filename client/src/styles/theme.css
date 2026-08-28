@@ -4,7 +4,7 @@
   --bg-clay: #191919;
   --bg-mist: #ffffff;
   --ink: #191919;
-  --ink-soft: #64615b;
+  --ink-soft: #4f4c46;
   --sage: #087f6f;
   --sage-soft: #e2f2ed;
   --amber: #e45b3f;
@@ -38,7 +38,7 @@
   --bg-clay: #6f8a66;
   --bg-mist: #f4f8f2;
   --ink: #213126;
-  --ink-soft: #445849;
+  --ink-soft: #34473a;
   --sage: #6a8b63;
   --sage-soft: #dce9d6;
   --amber: #b89a68;
@@ -54,7 +54,7 @@
   --bg-clay: #5e88a5;
   --bg-mist: #f4f8fb;
   --ink: #203245;
-  --ink-soft: #445e72;
+  --ink-soft: #354e62;
   --sage: #5f8ea7;
   --sage-soft: #d8e7f0;
   --amber: #e0a26b;
@@ -70,7 +70,7 @@
   --bg-clay: #c57c6c;
   --bg-mist: #fcf5f1;
   --ink: #3b2624;
-  --ink-soft: #6b4a44;
+  --ink-soft: #583b36;
   --sage: #a36d63;
   --sage-soft: #f0ddd8;
   --amber: #d99873;
@@ -96,7 +96,7 @@ body {
   margin: 0;
   color: var(--ink);
   font-family: 'Manrope', sans-serif;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 500;
   line-height: 1.6;
   overflow-x: hidden;
@@ -134,10 +134,12 @@ button,
 input,
 textarea {
   font: inherit;
+  font-size: max(16px, 0.94em);
 }
 
 select {
   font: inherit;
+  font-size: max(16px, 0.94em);
 }
 
 .app-root {
@@ -160,26 +162,26 @@ main > * {
 }
 
 h1 {
-  font-size: 32px;
+  font-size: clamp(36px, 5vw, 44px);
   font-weight: 800;
   line-height: 1.5;
 }
 
 h2 {
-  font-size: 24px;
+  font-size: clamp(28px, 3.5vw, 34px);
   font-weight: 750;
   line-height: 1.5;
 }
 
 h3 {
-  font-size: 18px;
+  font-size: 21px;
   font-weight: 700;
   line-height: 1.6;
 }
 
 .caption,
 small {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.6;
 }
@@ -2944,7 +2946,7 @@ input[type='date'],
 
 .landing-shell {
   --public-line: rgba(25, 25, 25, 0.11);
-  --public-muted: #6d6a63;
+  --public-muted: #514e48;
   --public-soft: #f7f6f2;
   width: min(1180px, 100%);
   margin: 0 auto;
@@ -3987,8 +3989,8 @@ input[type='date'],
 .experience-number {
   display: block;
   margin: 8px 0 36px;
-  color: #b5b1a7;
-  font-size: 13px;
+  color: #625f58;
+  font-size: 14px;
   font-weight: 800;
 }
 
