@@ -410,27 +410,35 @@ function buildPdf(data: CVData, template: CVTemplate, accent: AccentColor) {
     font: 'F1' | 'F2' = 'F1',
     color: [number, number, number] = black,
     lineHeight = size + 4,
+    wordSpacing = 0,
   ) {
     ensure(lineHeight + 2)
     append(
-      `BT /${font} ${size} Tf ${color[0].toFixed(3)} ${color[1].toFixed(3)} ${color[2].toFixed(3)} rg ${x.toFixed(2)} ${y.toFixed(2)} Td (${escapePdfText(value)}) Tj ET\n`,
+      `BT /${font} ${size} Tf ${color[0].toFixed(3)} ${color[1].toFixed(3)} ${color[2].toFixed(3)} rg ${wordSpacing.toFixed(2)} Tw ${x.toFixed(2)} ${y.toFixed(2)} Td (${escapePdfText(value)}) Tj ET\n`,
     )
     y -= lineHeight
   }
 
-  function wrapped(value: string, x: number, width: number, size: number, font: 'F1' | 'F2' = 'F1', color: [number, number, number] = black) {
-    wrapText(value, width, size).forEach((line) => textLine(line, x, size, font, color, size + 4))
+  function wrapped(value: string, x: number, width: number, size: number, font: 'F1' | 'F2' = 'F1', color: [number, number, number] = black, justify = false) {
+    const lines = wrapText(value, width, size)
+    lines.forEach((line, index) => {
+      const spaces = (line.match(/ /g) || []).length
+      const estimatedWidth = line.length * size * 0.52
+      const shouldJustify = justify && index < lines.length - 1 && spaces > 0 && estimatedWidth > width * 0.6
+      const wordSpacing = shouldJustify ? Math.min((width - estimatedWidth) / spaces, size * 1.5) : 0
+      textLine(line, x, size, font, color, size + 4, wordSpacing)
+    })
   }
 
   function rule() {
     ensure(14)
-    append(`${accentRgb[0].toFixed(3)} ${accentRgb[1].toFixed(3)} ${accentRgb[2].toFixed(3)} rg ${margin.toFixed(2)} ${(y - 3).toFixed(2)} ${contentWidth.toFixed(2)} 1.4 re f\n`)
-    y -= 14
+    append(`${accentRgb[0].toFixed(3)} ${accentRgb[1].toFixed(3)} ${accentRgb[2].toFixed(3)} rg ${margin.toFixed(2)} ${(y - 1).toFixed(2)} ${contentWidth.toFixed(2)} 1.4 re f\n`)
+    y -= 11
   }
 
   function section(title: string) {
     y -= 6
-    textLine(title.toUpperCase(), margin, 10, 'F2', accentRgb, 14)
+    textLine(title.toUpperCase(), margin, 10, 'F2', accentRgb, 11)
     rule()
   }
 
@@ -462,7 +470,7 @@ function buildPdf(data: CVData, template: CVTemplate, accent: AccentColor) {
 
   function renderProfile() {
     section('Profile')
-    wrapped(data.personal.summary, margin, contentWidth, 10, 'F1', black)
+    wrapped(data.personal.summary, margin, contentWidth, 10, 'F1', black, true)
   }
 
   function renderSkills() {
@@ -489,7 +497,7 @@ function buildPdf(data: CVData, template: CVTemplate, accent: AccentColor) {
       const title = [item.degree, item.school].filter(Boolean).join(' - ')
       const meta = [formatRange(item.start, item.end), item.location].filter(Boolean).join(' | ')
       itemHeading(title || 'Education', meta)
-      if (item.details) wrapped(item.details, margin, contentWidth, 9.5, 'F1', black)
+      if (item.details) wrapped(item.details, margin, contentWidth, 9.5, 'F1', black, true)
       y -= 4
     })
   }
@@ -510,7 +518,7 @@ function buildPdf(data: CVData, template: CVTemplate, accent: AccentColor) {
       if (!item.title && !item.venue && !item.details) return
       const meta = [item.venue, item.year, item.link].filter(Boolean).join(' | ')
       itemHeading(item.title || 'Publication', meta)
-      if (item.details) wrapped(item.details, margin, contentWidth, 9.5, 'F1', black)
+      if (item.details) wrapped(item.details, margin, contentWidth, 9.5, 'F1', black, true)
       y -= 4
     })
   }
@@ -536,7 +544,7 @@ function buildPdf(data: CVData, template: CVTemplate, accent: AccentColor) {
       const title = [item.name, item.role].filter(Boolean).join(' - ')
       const meta = [item.company, item.email, item.phone].filter(Boolean).join(' | ')
       itemHeading(title || 'Reference', meta)
-      if (item.note) wrapped(item.note, margin, contentWidth, 9.5, 'F1', black)
+      if (item.note) wrapped(item.note, margin, contentWidth, 9.5, 'F1', black, true)
       y -= 4
     })
   }
