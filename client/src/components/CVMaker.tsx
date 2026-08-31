@@ -432,7 +432,7 @@ function buildPdf(data: CVData, template: CVTemplate, accent: AccentColor) {
 
   function rule() {
     ensure(14)
-    append(`${accentRgb[0].toFixed(3)} ${accentRgb[1].toFixed(3)} ${accentRgb[2].toFixed(3)} rg ${margin.toFixed(2)} ${(y - 1).toFixed(2)} ${contentWidth.toFixed(2)} 1.4 re f\n`)
+    append(`${accentRgb[0].toFixed(3)} ${accentRgb[1].toFixed(3)} ${accentRgb[2].toFixed(3)} rg ${margin.toFixed(2)} ${(y + 6).toFixed(2)} ${contentWidth.toFixed(2)} 1.4 re f\n`)
     y -= 11
   }
 
