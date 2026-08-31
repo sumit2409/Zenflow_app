@@ -430,6 +430,14 @@ function buildPdf(data: CVData, template: CVTemplate, accent: AccentColor) {
     })
   }
 
+  function wrappedBullet(value: string, x: number, width: number, size = 9.5) {
+    const hangingIndent = 10
+    const lines = wrapText(value, width - hangingIndent, size)
+    lines.forEach((line, index) => {
+      textLine(index === 0 ? `- ${line}` : line, index === 0 ? x : x + hangingIndent, size, 'F1', black, size + 4)
+    })
+  }
+
   function rule() {
     ensure(14)
     append(`${accentRgb[0].toFixed(3)} ${accentRgb[1].toFixed(3)} ${accentRgb[2].toFixed(3)} rg ${margin.toFixed(2)} ${(y + 6).toFixed(2)} ${contentWidth.toFixed(2)} 1.4 re f\n`)
@@ -485,7 +493,7 @@ function buildPdf(data: CVData, template: CVTemplate, accent: AccentColor) {
       const title = [item.role, item.company].filter(Boolean).join(' - ')
       const meta = [formatRange(item.start, item.end, item.current), item.location].filter(Boolean).join(' | ')
       itemHeading(title || 'Experience', meta)
-      splitLines(item.bullets).forEach((line) => wrapped(`- ${line}`, margin + 10, contentWidth - 10, 9.5, 'F1', black))
+      splitLines(item.bullets).forEach((line) => wrappedBullet(line, margin + 10, contentWidth - 10))
       y -= 4
     })
   }
@@ -507,7 +515,7 @@ function buildPdf(data: CVData, template: CVTemplate, accent: AccentColor) {
     data.projects.forEach((item) => {
       if (!item.name && !item.details) return
       itemHeading(item.name || 'Project', item.link)
-      splitLines(item.details).forEach((line) => wrapped(`- ${line}`, margin + 10, contentWidth - 10, 9.5, 'F1', black))
+      splitLines(item.details).forEach((line) => wrapped(line, margin, contentWidth, 9.5, 'F1', black, true))
       y -= 4
     })
   }
@@ -527,14 +535,14 @@ function buildPdf(data: CVData, template: CVTemplate, accent: AccentColor) {
     section('Certifications')
     data.certifications
       .filter((item) => item.title || item.detail)
-      .forEach((item) => wrapped(`- ${item.title}${item.detail ? ` - ${item.detail}` : ''}`, margin + 10, contentWidth - 10, 9.5, 'F1', black))
+      .forEach((item) => wrappedBullet(`${item.title}${item.detail ? ` - ${item.detail}` : ''}`, margin + 10, contentWidth - 10))
   }
 
   function renderLanguages() {
     section('Languages')
     data.languages
       .filter((item) => item.name || item.level)
-      .forEach((item) => wrapped(`- ${item.name}${item.level ? ` - ${item.level}` : ''}`, margin + 10, contentWidth - 10, 9.5, 'F1', black))
+      .forEach((item) => wrappedBullet(`${item.name}${item.level ? ` - ${item.level}` : ''}`, margin + 10, contentWidth - 10))
   }
 
   function renderReferences() {
@@ -867,7 +875,7 @@ export default function CVMaker() {
               <article key={item.id} className="cv-preview-item">
                 <strong>{item.name || 'Project'}</strong>
                 {item.link && <small>{item.link}</small>}
-                <ul>{splitLines(item.details).map((line, index) => <li key={`${item.id}-${index}`}>{line}</li>)}</ul>
+                {splitLines(item.details).map((line, index) => <p key={`${item.id}-${index}`}>{line}</p>)}
               </article>
             ))}
         </section>
