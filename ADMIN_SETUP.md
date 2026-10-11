@@ -85,8 +85,12 @@ Before using the inbox in production:
 
 1. In Render, keep `RESEND_API_KEY` set to a key with permission to read received
    emails. A sending-only key will not work for the inbox. Keep the key server-side.
-2. To send from the new address, set `RESEND_FROM` to
-   `Zenflow <sumit.tiwari@zenflow.bio>` after verifying the domain for sending.
+2. Keep `RESEND_FROM` set to `Zenflow <no-reply@zenflow.bio>` for account
+   verification and password reset emails. Set `RESEND_ADMIN_FROM` to
+   `Zenflow <sumit.tiwari@zenflow.bio>` for admin contact replies, direct campaign
+   sends, and queued campaigns (including admin-initiated verification reminders).
+   Verify the domain for sending first. If `RESEND_ADMIN_FROM` is absent, admin
+   emails use `RESEND_FROM`. SMTP delivery still uses `SMTP_FROM`.
 3. In Resend, open **Domains → zenflow.bio** and enable receiving. Add the exact
    receiving MX record shown there to your domain DNS and wait for verification.
    Receiving MX records differ from the sending records; use Resend's values.
