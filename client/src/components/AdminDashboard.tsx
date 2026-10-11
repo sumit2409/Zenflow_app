@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import type { AuthAccount } from '../types/auth'
 import { apiUrl } from '../utils/api'
 import './AdminDashboard.css'
+import AdminEmailInbox from './AdminEmailInbox'
 
 type Props = {
   account: AuthAccount | null
@@ -10,7 +11,7 @@ type Props = {
   onNotify?: (message: string) => void
 }
 
-type AdminTab = 'overview' | 'users' | 'messages' | 'campaigns' | 'templates' | 'queue' | 'audit'
+type AdminTab = 'overview' | 'users' | 'messages' | 'email' | 'campaigns' | 'templates' | 'queue' | 'audit'
 type UserFilter = 'all' | 'verified' | 'unverified' | 'active' | 'inactive'
 type MessageFilter = 'all' | 'new' | 'replied' | 'archived'
 type UserSort = 'created_desc' | 'created_asc' | 'login_desc' | 'points_desc' | 'email_asc' | 'username_asc'
@@ -226,7 +227,8 @@ type ReplyEditorState = {
 const TABS: Array<{ id: AdminTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'users', label: 'Users' },
-  { id: 'messages', label: 'Inbox' },
+  { id: 'messages', label: 'Contact messages' },
+  { id: 'email', label: 'Email inbox' },
   { id: 'campaigns', label: 'Campaigns' },
   { id: 'templates', label: 'Templates' },
   { id: 'queue', label: 'Queue' },
@@ -873,7 +875,7 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
         <SectionShell title="Admin access">
           <div className="admin-empty-state">
             <strong>Admin access is restricted.</strong>
-            <p>Only the verified account for contactsumit2409@gmail.com can open this dashboard.</p>
+            <p>Only verified accounts with an authorized admin email can open this dashboard.</p>
           </div>
         </SectionShell>
       </section>
@@ -916,6 +918,8 @@ export default function AdminDashboard({ account, token, onClose, onNotify }: Pr
           </button>
         ))}
       </div>
+
+      {activeTab === 'email' && token && <AdminEmailInbox token={token} />}
 
       {activeTab === 'overview' && (
         <div className="admin-grid">

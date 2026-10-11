@@ -9,6 +9,7 @@ const path = require('path')
 const crypto = require('crypto')
 const nodemailer = require('nodemailer')
 const { OAuth2Client } = require('google-auth-library')
+const { createResendInbox } = require('./resendInbox')
 require('dotenv').config({ path: path.join(__dirname, '.env') })
 
 const JWT_SECRET = process.env.ZENFLOW_SECRET || 'dev-secret'
@@ -49,6 +50,7 @@ const COACH_HISTORY_LIMIT = 10
 const COACH_MESSAGE_CHAR_LIMIT = 1600
 const COACH_RESPONSE_TIMEOUT_MS = 20000
 const ADMIN_EMAIL = 'contactsumit2409@gmail.com'
+const ADMIN_EMAILS = new Set([ADMIN_EMAIL, 'sumit.tiwari@zenflow.bio'])
 const EMAIL_QUEUE_BATCH_SIZE = clampIntegerEnv(process.env.EMAIL_QUEUE_BATCH_SIZE, 8, 1, 100)
 const EMAIL_QUEUE_INTERVAL_MS = clampIntegerEnv(process.env.EMAIL_QUEUE_INTERVAL_MS, 60000, 5000, 600000)
 const EMAIL_QUEUE_MAX_ATTEMPTS = clampIntegerEnv(process.env.EMAIL_QUEUE_MAX_ATTEMPTS, 4, 1, 10)
@@ -1089,7 +1091,7 @@ function buildAnalyticsUserId(user) {
 }
 
 function isAdminEmail(email) {
-  return normalizeEmail(email) === ADMIN_EMAIL
+  return ADMIN_EMAILS.has(normalizeEmail(email))
 }
 
 function isAdminUser(user) {
@@ -3858,6 +3860,26 @@ app.get('/api/meta', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'server error' })
+  }
+})
+
+const resendInbox = createResendInbox(RESEND_API_KEY)
+
+app.get('/api/admin/email-inbox', authMiddleware, adminMiddleware, async (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  try {
+    return res.json(await resendInbox.list(String(req.query.after || '')))
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.status ? error.message : 'Email inbox could not load.' })
+  }
+})
+
+app.get('/api/admin/email-inbox/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  try {
+    return res.json(await resendInbox.get(req.params.id))
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.status ? error.message : 'Email could not load.' })
   }
 })
 

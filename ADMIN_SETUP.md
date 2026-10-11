@@ -17,7 +17,7 @@ Zenflow now includes an admin-only dashboard inside the existing app for:
 ## Admin access model
 
 - Admin access is not user-editable.
-- A user becomes admin only when their verified account email is exactly `contactsumit2409@gmail.com`.
+- A user becomes admin only when their verified account email is `contactsumit2409@gmail.com` or `sumit.tiwari@zenflow.bio`.
 - Backend admin APIs are protected by JWT auth plus admin middleware.
 - There is no separate public admin registration path and no role flag users can self-assign.
 
@@ -63,11 +63,45 @@ Optional queue tuning:
 
 1. Install dependencies.
 2. Start the server and client with the project's normal dev flow.
-3. Register or sign in with `contactsumit2409@gmail.com`.
+3. Register or sign in with `contactsumit2409@gmail.com` or `sumit.tiwari@zenflow.bio`.
 4. Verify that account's email.
 5. Open the app and use the `Admin` button in the header.
 
+The domain email must have a working inbox at your email hosting provider before
+registering and verifying it. Adding an admin email here does not create a mailbox.
+
 ## Deployment notes
+
+### Resend inbox for Sumit
+
+The **Email inbox** tab reads messages addressed to `sumit.tiwari@zenflow.bio`
+using Resend's receiving API. Both authorized admin accounts can read this inbox.
+Contact-form submissions remain in the **Contact messages** tab. The inbox supports
+refresh, previous/next pages, and reading plain-text or isolated HTML bodies.
+Attachment filenames are displayed; download attachments from Resend itself.
+Sending campaigns and contact replies continues through the existing tools.
+
+Before using the inbox in production:
+
+1. In Render, keep `RESEND_API_KEY` set to a key with permission to read received
+   emails. A sending-only key will not work for the inbox. Keep the key server-side.
+2. To send from the new address, set `RESEND_FROM` to
+   `Zenflow <sumit.tiwari@zenflow.bio>` after verifying the domain for sending.
+3. In Resend, open **Domains → zenflow.bio** and enable receiving. Add the exact
+   receiving MX record shown there to your domain DNS and wait for verification.
+   Receiving MX records differ from the sending records; use Resend's values.
+4. Deploy these source changes to Render. Use the existing verified Gmail admin
+   to open **Admin → Email inbox** and confirm an incoming test email appears.
+5. Register the new domain address in Zenflow and verify its email. You can read
+   its verification message through the existing admin's inbox access.
+
+No webhook is required for this inbox: it loads messages directly when opened or
+refreshed. Enabling receiving and changing DNS must be completed in Resend and
+your DNS account; editing this repository does not provision domain email.
+
+Official setup guide: https://resend.com/docs/dashboard/receiving/custom-domains
+
+### General deployment
 
 1. Set the email provider env vars in Render.
 2. Set queue env vars only if you want different throttling from the defaults.
