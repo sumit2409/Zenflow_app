@@ -14,6 +14,7 @@ function mockSender(adminFrom) {
   const context = {
     process: { env: { RESEND_FROM: 'Zenflow <no-reply@zenflow.bio>', RESEND_ADMIN_FROM: adminFrom } },
     SMTP_FROM: '', RESEND_API_KEY: 'mock-key', SMTP_RESET_BCC: '',
+    MAILBOX: 'sumit.tiwari@zenflow.bio',
     normalizeEmail: (value) => String(value || '').trim().toLowerCase(),
     AbortController, setTimeout, clearTimeout, console,
     fetch: async (_url, options) => {
@@ -26,24 +27,24 @@ function mockSender(adminFrom) {
   return { send: context.sendTransactionalEmail, messages }
 }
 
-test('auth email uses the original sender while admin email uses its separate sender', async () => {
+test('transactional email always keeps the original sender even with personal sender configured', async () => {
   const { send, messages } = mockSender('Zenflow <sumit.tiwari@zenflow.bio>')
   const email = { to: 'recipient@example.com', subject: 'Test', text: 'Hello', preferredProvider: 'resend' }
   assert.equal((await send(email)).delivered, true)
-  assert.equal((await send({ ...email, adminSender: true })).delivered, true)
+  assert.equal((await send({ ...email, replyTo: 'contactsumit2409@gmail.com' })).delivered, true)
   assert.equal(messages[0].from, 'Zenflow <no-reply@zenflow.bio>')
-  assert.equal(messages[1].from, 'Zenflow <sumit.tiwari@zenflow.bio>')
+  assert.equal(messages[1].from, 'Zenflow <no-reply@zenflow.bio>')
 })
 
 test('existing deployments keep their sender when the new variable is absent', async () => {
   const { send, messages } = mockSender(undefined)
-  await send({ to: 'recipient@example.com', subject: 'Test', adminSender: true, preferredProvider: 'resend' })
+  await send({ to: 'recipient@example.com', subject: 'Test', preferredProvider: 'resend' })
   assert.equal(messages[0].from, 'Zenflow <no-reply@zenflow.bio>')
 })
 
-test('an explicit reply address is retained with the separate admin sender', async () => {
+test('transactional email retains an explicit reply address', async () => {
   const { send, messages } = mockSender('Zenflow <sumit.tiwari@zenflow.bio>')
-  await send({ to: 'recipient@example.com', subject: 'Test', adminSender: true,
+  await send({ to: 'recipient@example.com', subject: 'Test',
     preferredProvider: 'resend', replyTo: 'sumit.tiwari@zenflow.bio' })
   assert.equal(messages[0].reply_to, 'sumit.tiwari@zenflow.bio')
 })

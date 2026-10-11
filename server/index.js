@@ -9,7 +9,7 @@ const path = require('path')
 const crypto = require('crypto')
 const nodemailer = require('nodemailer')
 const { OAuth2Client } = require('google-auth-library')
-const { createResendInbox } = require('./resendInbox')
+const { createResendInbox, MAILBOX } = require('./resendInbox')
 require('dotenv').config({ path: path.join(__dirname, '.env') })
 
 const JWT_SECRET = process.env.ZENFLOW_SECRET || 'dev-secret'
@@ -29,7 +29,7 @@ const SMTP_FROM = String(process.env.SMTP_FROM || SMTP_USER || '').trim()
 const SMTP_RESET_BCC = String(process.env.SMTP_RESET_BCC || '').trim()
 const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim()
 const RESEND_FROM = String(process.env.RESEND_FROM || SMTP_FROM || '').trim()
-const RESEND_ADMIN_FROM = String(process.env.RESEND_ADMIN_FROM || RESEND_FROM).trim()
+const RESEND_ADMIN_FROM = String(process.env.RESEND_ADMIN_FROM || `Sumit Tiwari <${MAILBOX}>`).trim()
 const ADMIN_BROADCAST_KEY = String(process.env.ADMIN_BROADCAST_KEY || '').trim()
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || '').trim()
 const GEMINI_COACH_MODEL = String(process.env.GEMINI_COACH_MODEL || 'gemini-2.0-flash').trim() || 'gemini-2.0-flash'
@@ -643,7 +643,7 @@ function buildEmailVerificationEmail({ fullName, code, verifyUrl }) {
   }
 }
 
-async function sendTransactionalEmail({ to, subject, text, html, preferredProvider = 'auto', replyTo = '', adminSender = false }) {
+async function sendTransactionalEmail({ to, subject, text, html, preferredProvider = 'auto', replyTo = '' }) {
   const recipients = Array.isArray(to) ? to : [to]
   const normalizedRecipients = Array.from(
     new Set(
@@ -655,10 +655,9 @@ async function sendTransactionalEmail({ to, subject, text, html, preferredProvid
   )
   if (!normalizedRecipients.length) return { delivered: false }
   const normalizedReplyTo = normalizeEmail(replyTo)
-  const resendFrom = adminSender ? RESEND_ADMIN_FROM : RESEND_FROM
 
   async function sendViaResend() {
-    if (!RESEND_API_KEY || !resendFrom) return { attempted: false, delivered: false }
+    if (!RESEND_API_KEY || !RESEND_FROM) return { attempted: false, delivered: false }
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 20000)
@@ -669,7 +668,7 @@ async function sendTransactionalEmail({ to, subject, text, html, preferredProvid
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: resendFrom,
+          from: RESEND_FROM,
           to: normalizedRecipients,
           bcc: SMTP_RESET_BCC ? [SMTP_RESET_BCC] : undefined,
           reply_to: normalizedReplyTo || undefined,
@@ -2987,7 +2986,6 @@ async function processEmailQueue() {
         text: deliveryText,
         html: deliveryHtml,
         preferredProvider: job.preferredProvider || 'auto',
-        adminSender: true,
       })
 
       if (result.delivered) {
@@ -3866,12 +3864,27 @@ app.get('/api/meta', authMiddleware, async (req, res) => {
   }
 })
 
-const resendInbox = createResendInbox(RESEND_API_KEY)
+const resendInbox = createResendInbox(RESEND_API_KEY, fetch, RESEND_ADMIN_FROM)
+
+app.post('/api/admin/email-inbox/send', authMiddleware, adminMiddleware, async (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  try {
+    const result = await resendInbox.send(req.body || {})
+    // A logging failure must not turn an accepted send into an apparent failure.
+    try {
+      await recordAuditLog({ actorUser: req.adminUser, action: 'admin.personal-email.send',
+        targetType: 'email', targetId: result.id, summary: 'Sent personal mailbox email' })
+    } catch (error) { console.error('Personal email audit failed:', error?.message) }
+    return res.json({ ok: true, id: result.id })
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.status ? error.message : 'Email could not be sent.' })
+  }
+})
 
 app.get('/api/admin/email-inbox', authMiddleware, adminMiddleware, async (req, res) => {
   res.set('Cache-Control', 'no-store')
   try {
-    return res.json(await resendInbox.list(String(req.query.after || '')))
+    return res.json(await resendInbox.list(String(req.query.after || ''), req.query.folder === 'sent' ? 'sent' : 'inbox'))
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.status ? error.message : 'Email inbox could not load.' })
   }
@@ -3880,7 +3893,7 @@ app.get('/api/admin/email-inbox', authMiddleware, adminMiddleware, async (req, r
 app.get('/api/admin/email-inbox/:id', authMiddleware, adminMiddleware, async (req, res) => {
   res.set('Cache-Control', 'no-store')
   try {
-    return res.json(await resendInbox.get(req.params.id))
+    return res.json(await resendInbox.get(req.params.id, req.query.folder === 'sent' ? 'sent' : 'inbox'))
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.status ? error.message : 'Email could not load.' })
   }
@@ -4060,7 +4073,6 @@ app.post('/api/admin/messages/:id/reply', authMiddleware, adminMiddleware, async
       `,
       preferredProvider,
       replyTo: req.adminUser.email || ADMIN_EMAIL,
-      adminSender: true,
     })
 
     if (!delivery.delivered) {
@@ -4389,7 +4401,6 @@ app.post('/api/admin/campaigns/:id/send-now', authMiddleware, adminMiddleware, a
         html: rendered.html,
         preferredProvider: campaign.preferredProvider || 'auto',
         replyTo: req.adminUser.email || ADMIN_EMAIL,
-        adminSender: true,
       })
 
       if (delivery.delivered) {

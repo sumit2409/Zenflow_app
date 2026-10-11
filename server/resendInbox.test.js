@@ -67,3 +67,55 @@ test('provider errors never return the API key or raw provider response', async 
   const unavailable = createResendInbox('key', async () => { throw new Error('secret-key') })
   await assert.rejects(unavailable.list(), { status: 502 })
 })
+
+const personalDraft = { to: 'friend@example.com', subject: 'Hello', text: 'Personal message', requestId: '01234567-89ab-cdef-0123-456789abcdef' }
+
+test('personal sends use mailbox sender and reply address without auth-email BCC', async () => {
+  let sent
+  const inbox = createResendInbox('key', async (url, options) => {
+    sent = { url, options, body: JSON.parse(options.body) }
+    return { ok: true, json: async () => ({ id: 'sent-id' }) }
+  })
+  assert.deepEqual(await inbox.send(personalDraft), { id: 'sent-id' })
+  assert.equal(sent.url, 'https://api.resend.com/emails')
+  assert.equal(sent.options.method, 'POST')
+  assert.equal(sent.body.from, `Sumit Tiwari <${MAILBOX}>`)
+  assert.equal(sent.body.reply_to, MAILBOX)
+  assert.equal(sent.body.bcc, undefined)
+  assert.equal(sent.options.headers['Idempotency-Key'], `personal-email/${personalDraft.requestId}`)
+})
+
+test('reply checks original mailbox and adds conversation headers', async () => {
+  let sent
+  const inbox = createResendInbox('key', async (url, options) => {
+    if (options.method === 'POST') {
+      sent = JSON.parse(options.body)
+      return { ok: true, json: async () => ({ id: 'sent-id' }) }
+    }
+    assert.match(url, /receiving\/original$/)
+    return { ok: true, json: async () => ({ to: [MAILBOX], from: 'Sender <sender@example.com>',
+      reply_to: ['Friend <friend@example.com>'], message_id: '<original@example.com>' }) }
+  })
+  await inbox.send({ ...personalDraft, replyToId: 'original' })
+  assert.deepEqual(sent.headers, { 'In-Reply-To': '<original@example.com>', References: '<original@example.com>' })
+  await assert.rejects(inbox.send({ ...personalDraft, replyToId: 'original', to: 'other@example.com' }), { status: 400 })
+})
+
+test('rejects invalid drafts and a sender outside the personal mailbox', async () => {
+  const noFetch = async () => { throw new Error('Must not fetch') }
+  const inbox = createResendInbox('key', noFetch)
+  for (const changes of [{ to: 'a@example.com,b@example.com' }, { to: 'bad' }, { subject: 'Injected\r\nBcc: a@example.com' },
+    { subject: '' }, { text: '' }, { text: 'x'.repeat(20001) }, { requestId: '' }]) {
+    await assert.rejects(inbox.send({ ...personalDraft, ...changes }), { status: 400 })
+  }
+  await assert.rejects(createResendInbox('key', noFetch, 'Zenflow <no-reply@zenflow.bio>').send(personalDraft), { status: 503 })
+})
+
+test('sent folder excludes automated mail and protects sent detail', async () => {
+  const inbox = createResendInbox('key', async (url) => ({ ok: true, json: async () =>
+    url.includes('?') ? { data: [{ id: 'mine', from: `Sumit <${MAILBOX}>`, to: ['friend@example.com'] },
+      { id: 'automated', from: 'no-reply@zenflow.bio' }], has_more: false }
+      : { from: 'no-reply@zenflow.bio', to: [MAILBOX] } }))
+  assert.deepEqual((await inbox.list('', 'sent')).items.map((item) => item.id), ['mine'])
+  await assert.rejects(inbox.get('automated', 'sent'), { status: 404 })
+})

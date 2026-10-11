@@ -78,26 +78,32 @@ The **Email inbox** tab reads messages addressed to `sumit.tiwari@zenflow.bio`
 using Resend's receiving API. Both authorized admin accounts can read this inbox.
 Contact-form submissions remain in the **Contact messages** tab. The inbox supports
 refresh, previous/next pages, and reading plain-text or isolated HTML bodies.
+Use **Compose** to send a personal email and **Reply** to answer an incoming email.
+The **Sent** folder shows emails sent from the personal address. Personal messages
+use Resend directly with reply threading and duplicate-send protection; they are
+separate from the campaign queue and authentication messages.
 Attachment filenames are displayed; download attachments from Resend itself.
 Sending campaigns and contact replies continues through the existing tools.
 
 Before using the inbox in production:
 
 1. In Render, keep `RESEND_API_KEY` set to a key with permission to read received
-   emails. A sending-only key will not work for the inbox. Keep the key server-side.
+   and sent emails as well as send messages. A sending-only key will not work for
+   reading the inbox. Keep the key server-side.
 2. Keep `RESEND_FROM` set to `Zenflow <no-reply@zenflow.bio>` for account
-   verification and password reset emails. Set `RESEND_ADMIN_FROM` to
-   `Zenflow <sumit.tiwari@zenflow.bio>` for admin contact replies, direct campaign
-   sends, and queued campaigns (including admin-initiated verification reminders).
-   Verify the domain for sending first. If `RESEND_ADMIN_FROM` is absent, admin
-   emails use `RESEND_FROM`. SMTP delivery still uses `SMTP_FROM`.
+   verification, password resets, campaigns, and contact-form replies. Set
+   `RESEND_ADMIN_FROM` to `Sumit Tiwari <sumit.tiwari@zenflow.bio>` for personal
+   messages composed in the inbox. This is the default when the variable is absent.
+   The address must remain `sumit.tiwari@zenflow.bio`; you can customize the display
+   name. Verify the domain for sending first. SMTP delivery still uses `SMTP_FROM`.
 3. In Resend, open **Domains → zenflow.bio** and enable receiving. Add the exact
    receiving MX record shown there to your domain DNS and wait for verification.
    Receiving MX records differ from the sending records; use Resend's values.
 4. Deploy these source changes to Render. Use the existing verified Gmail admin
    to open **Admin → Email inbox** and confirm an incoming test email appears.
-5. Register the new domain address in Zenflow and verify its email. You can read
-   its verification message through the existing admin's inbox access.
+5. Use Compose to send a personal message, check Sent, and test an incoming reply.
+   You can use the mailbox while signed in with your existing Gmail admin account.
+   Registering the personal email as a separate Zenflow account is optional.
 
 No webhook is required for this inbox: it loads messages directly when opened or
 refreshed. Enabling receiving and changing DNS must be completed in Resend and
