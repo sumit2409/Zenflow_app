@@ -4,3 +4,26 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+.coach-panel {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.coach-panel .coach-feed {
+  flex: 1 1 auto;
+  min-height: 100px;
+}
+.coach-panel .coach-head,
+.coach-panel .coach-quick-prompts,
+.coach-panel .coach-form,
+.coach-panel .coach-feedback,
+.coach-panel .coach-request-status {
+  flex: 0 0 auto;
+}
+.coach-request-status {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}

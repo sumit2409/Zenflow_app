@@ -42,6 +42,9 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const feedRef = useRef<HTMLDivElement>(null)
+  const requestRef = useRef<AbortController | null>(null)
+
+  useEffect(() => () => requestRef.current?.abort(), [])
   const [consentClearance, setConsentClearance] = useState<number | null>(null)
 
   useEffect(() => {
@@ -78,7 +81,7 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
 
   async function sendMessage(rawMessage: string) {
     const message = rawMessage.trim()
-    if (!message || isSending) return
+    if (!message || requestRef.current) return
 
     const nextUserMessage: CoachMessage = {
       id: createMessageId(),
@@ -95,10 +98,14 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
     setDraft('')
     setError(null)
     setIsSending(true)
+    const controller = new AbortController()
+    requestRef.current = controller
+    const timeout = window.setTimeout(() => controller.abort(), 130000)
 
     try {
       const response = await fetch(apiUrl('/api/coach/chat'), {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           authorization: `Bearer ${token}`,
@@ -109,8 +116,12 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
         }),
       })
 
-      const payload = await response.json().catch(() => ({}))
+      const payload = await response.json().catch((error) => {
+        if (controller.signal.aborted) throw error
+        throw new Error('Coach returned an unreadable response. Please try again.')
+      })
       if (!response.ok) {
+        if (response.status === 401) throw new Error('Your sign-in has expired. Sign out and sign in again to use Coach.')
         throw new Error(typeof payload?.error === 'string' ? payload.error : 'Coach is unavailable right now.')
       }
 
@@ -123,8 +134,14 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
 
       setMessages((current) => [...current, assistantMessage])
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : 'Coach is unavailable right now.')
+      setError(controller.signal.aborted
+        ? controller.signal.reason === 'cancelled'
+          ? 'Request cancelled. You can type and send another message.'
+          : 'Coach took too long to reply. Please try again; the local AI computer may be busy or offline.'
+        : sendError instanceof Error ? sendError.message : 'Coach is unavailable right now.')
     } finally {
+      window.clearTimeout(timeout)
+      requestRef.current = null
       setIsSending(false)
     }
   }
@@ -156,7 +173,7 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
 
           <div className="coach-quick-prompts" aria-label="Suggested prompts">
             {QUICK_PROMPTS.map((prompt) => (
-              <button key={prompt} type="button" className="coach-chip" onClick={() => void sendMessage(prompt)}>
+              <button key={prompt} type="button" className="coach-chip" disabled={isSending} onClick={() => void sendMessage(prompt)}>
                 {prompt}
               </button>
             ))}
@@ -200,11 +217,15 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
             </div>
           )}
 
-          <form className="coach-form" onSubmit={handleSubmit}>
+          <p className="coach-request-status" role="status">
+            {isSending ? 'Request sent. Local AI can take up to two minutes to reply.' : 'Type a message or choose a suggestion.'}
+          </p>
+          <form className="coach-form" onSubmit={handleSubmit} aria-busy={isSending}>
             <label className="coach-input-wrap">
               <span className="sr-only">Ask Zenflow Coach</span>
               <textarea
                 rows={3}
+                maxLength={1600}
                 placeholder="Ask about your focus, streaks, planning, or what to use next..."
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
@@ -212,9 +233,14 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
               />
             </label>
             <button type="submit" className="primary-cta coach-send-btn" disabled={isSending || !draft.trim()}>
-              Send
+              {isSending ? 'Sending...' : 'Send'}
             </button>
           </form>
+          {isSending && (
+            <button type="button" className="ghost-btn coach-cancel-btn" onClick={() => requestRef.current?.abort('cancelled')}>
+              Cancel request
+            </button>
+          )}
         </section>
       )}
 
