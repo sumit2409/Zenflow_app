@@ -24,9 +24,9 @@ type Props = {
 
 const QUICK_PROMPTS = [
   'How am I doing this week?',
-  'Help me plan today around my current progress.',
+  'Help me plan today.',
   'What should I improve first?',
-  'Which Zenflow tool or article fits me right now?',
+  'Find a tool for me.',
 ]
 
 function createMessageId() {
@@ -46,12 +46,18 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
 
   useEffect(() => () => requestRef.current?.abort(), [])
   const [consentClearance, setConsentClearance] = useState<number | null>(null)
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null)
 
   useEffect(() => {
     let banner: Element | null = null
     const measure = () => {
       const rect = banner?.getBoundingClientRect()
-      setConsentClearance(rect && rect.height > 0 ? Math.ceil(window.innerHeight - rect.top + 12) : null)
+      const viewport = window.visualViewport
+      const keyboardInset = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0
+      const bannerInset = rect && rect.height > 0 ? window.innerHeight - rect.top + 12 : 0
+      const clearance = Math.ceil(Math.max(bannerInset, keyboardInset > 0 ? keyboardInset + 12 : 0))
+      setConsentClearance(clearance || null)
+      setViewportHeight(viewport?.height || window.innerHeight)
     }
     const resize = new ResizeObserver(measure)
     const locate = () => {
@@ -66,17 +72,21 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
     const changes = new MutationObserver(locate)
     changes.observe(document.body, { childList: true, subtree: true })
     window.addEventListener('resize', measure)
+    window.visualViewport?.addEventListener('resize', measure)
+    window.visualViewport?.addEventListener('scroll', measure)
     locate()
     return () => {
       changes.disconnect()
       resize.disconnect()
       window.removeEventListener('resize', measure)
+      window.visualViewport?.removeEventListener('resize', measure)
+      window.visualViewport?.removeEventListener('scroll', measure)
     }
   }, [])
 
   useEffect(() => {
     if (!feedRef.current) return
-    feedRef.current.scrollTop = feedRef.current.scrollHeight
+    feedRef.current.scrollTop = messages.length ? feedRef.current.scrollHeight : 0
   }, [messages, isSending, isOpen])
 
   async function sendMessage(rawMessage: string) {
@@ -152,112 +162,73 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
   }
 
   return (
-    <div className={`coach-shell ${isOpen ? 'is-open' : ''}`} style={consentClearance === null ? undefined : { bottom: consentClearance, '--coach-clearance': `${consentClearance}px` } as React.CSSProperties}>
+    <div className={`zc-shell ${isOpen ? 'is-open' : ''}`} style={{
+      ...(consentClearance === null ? {} : { bottom: consentClearance, '--zc-clearance': `${consentClearance}px` }),
+      ...(viewportHeight === null ? {} : { '--zc-viewport-height': `${viewportHeight}px` }),
+    } as React.CSSProperties}>
       {isOpen && (
-        <section id="zenflow-coach-panel" className="coach-panel card" aria-label="Zenflow Coach">
-          <header className="coach-head">
-            <div className="coach-headline">
-              <div className="coach-cat coach-cat-small" aria-hidden="true">
-                <span className="coach-cat-face" />
-              </div>
-              <div>
-                <div className="section-kicker">Zenflow Coach</div>
-                <h3>Ask about your progress, next step, or plan.</h3>
-                <p className="coach-subline">I use your recent Zenflow activity to answer more personally.</p>
-              </div>
+        <section id="zenflow-coach-panel" className="zc-panel" aria-label="Zenflow Coach">
+          <header className="zc-head">
+            <div className="zc-avatar" aria-hidden="true">Z</div>
+            <div className="zc-heading">
+              <h2>Zenflow Coach</h2>
+              <p>Your progress, one step at a time.</p>
             </div>
-            <button type="button" className="ghost-btn coach-close-btn" onClick={() => setIsOpen(false)} aria-label="Close coach">
-              Close
-            </button>
+            <button type="button" className="zc-close" onClick={() => setIsOpen(false)} aria-label="Close coach">&times;</button>
           </header>
 
-          <div className="coach-quick-prompts" aria-label="Suggested prompts">
-            {QUICK_PROMPTS.map((prompt) => (
-              <button key={prompt} type="button" className="coach-chip" disabled={isSending} onClick={() => void sendMessage(prompt)}>
-                {prompt}
-              </button>
-            ))}
-          </div>
-
-          <div ref={feedRef} className="coach-feed">
+          <div ref={feedRef} className="zc-feed" role="log" aria-label="Coach conversation" aria-live="polite">
             {messages.length === 0 ? (
-              <article className="coach-empty-state">
-                <strong>Hi {displayName.split(' ')[0] || displayName}.</strong>
-                <p>I can summarize your recent performance, suggest the right Zenflow tool or article, and help you make a simple plan for today or this week.</p>
+              <div className="zc-welcome">
+                <span className="zc-eyebrow">A little clarity for your day</span>
+                <h3>Hi {displayName.split(' ')[0] || displayName}.</h3>
+                <p>Let's look at your progress and find a simple next step.</p>
+                <div className="zc-suggestions" aria-label="Suggested prompts">
+                  {QUICK_PROMPTS.map((prompt) => (
+                    <button key={prompt} type="button" className="zc-chip" disabled={isSending} onClick={() => void sendMessage(prompt)}>
+                      <span>{prompt}</span><span aria-hidden="true">&rarr;</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="zc-context-note">Answers use your recent Zenflow activity.</p>
+              </div>
+            ) : messages.map((message) => (
+              <article key={message.id} className={`zc-message zc-message-${message.role}`}>
+                <div className="zc-message-role">{message.role === 'assistant' ? 'Zenflow' : 'You'}</div>
+                <p>{message.content}</p>
+                {message.role === 'assistant' && !!message.resources?.length && (
+                  <div className="zc-resources">
+                    {message.resources.map((resource) => (
+                      <button key={`${resource.kind}-${resource.id}`} type="button" className="zc-resource" onClick={() => onOpenResource(resource)}>
+                        <strong>{resource.label}</strong><span>{resource.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </article>
-            ) : (
-              messages.map((message) => (
-                <article key={message.id} className={`coach-message coach-message-${message.role}`}>
-                  <div className="coach-message-role">{message.role === 'assistant' ? 'Coach' : 'You'}</div>
-                  <p>{message.content}</p>
-                  {message.role === 'assistant' && message.resources && message.resources.length > 0 && (
-                    <div className="coach-resource-list">
-                      {message.resources.map((resource) => (
-                        <button key={`${resource.kind}-${resource.id}`} type="button" className="coach-resource-btn" onClick={() => onOpenResource(resource)}>
-                          <strong>{resource.label}</strong>
-                          <span>{resource.description}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </article>
-              ))
-            )}
-            {isSending && (
-              <article className="coach-message coach-message-assistant coach-message-loading" aria-live="polite">
-                <div className="coach-message-role">Coach</div>
-                <p>Thinking through your recent patterns...</p>
-              </article>
-            )}
+            ))}
+            {isSending && <div className="zc-thinking" aria-hidden="true"><span /><span /><span />Thinking through your progress</div>}
           </div>
 
-          {error && (
-            <div className="form-feedback error coach-feedback" role="alert">
-              {error}
+          <footer className="zc-composer">
+            {error && <p className="zc-error" role="alert">{error}</p>}
+            <form className="zc-form" onSubmit={handleSubmit} aria-busy={isSending}>
+              <label className="zc-input-wrap">
+                <span className="zc-sr-only">Ask Zenflow Coach</span>
+                <textarea rows={2} maxLength={1600} placeholder="Ask about your progress..." value={draft}
+                  onChange={(event) => setDraft(event.target.value)} disabled={isSending} />
+              </label>
+              <button type="submit" className="zc-send" disabled={isSending || !draft.trim()}>{isSending ? 'Sending...' : 'Send'}</button>
+            </form>
+            <div className="zc-status-row">
+              <p role="status">{isSending ? 'Local AI may take up to 2 minutes.' : 'Small steps. Steady progress.'}</p>
+              {isSending && <button type="button" className="zc-cancel" onClick={() => requestRef.current?.abort('cancelled')}>Cancel request</button>}
             </div>
-          )}
-
-          <p className="coach-request-status" role="status">
-            {isSending ? 'Request sent. Local AI can take up to two minutes to reply.' : 'Type a message or choose a suggestion.'}
-          </p>
-          <form className="coach-form" onSubmit={handleSubmit} aria-busy={isSending}>
-            <label className="coach-input-wrap">
-              <span className="sr-only">Ask Zenflow Coach</span>
-              <textarea
-                rows={3}
-                maxLength={1600}
-                placeholder="Ask about your focus, streaks, planning, or what to use next..."
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                disabled={isSending}
-              />
-            </label>
-            <button type="submit" className="primary-cta coach-send-btn" disabled={isSending || !draft.trim()}>
-              {isSending ? 'Sending...' : 'Send'}
-            </button>
-          </form>
-          {isSending && (
-            <button type="button" className="ghost-btn coach-cancel-btn" onClick={() => requestRef.current?.abort('cancelled')}>
-              Cancel request
-            </button>
-          )}
+          </footer>
         </section>
       )}
-
-      <button
-        type="button"
-        className="coach-launcher"
-        aria-expanded={isOpen}
-        aria-controls="zenflow-coach-panel"
-        onClick={() => setIsOpen((current) => !current)}
-      >
-        <span className="coach-cat" aria-hidden="true">
-          <span className="coach-cat-face" />
-        </span>
-        <span className="coach-launcher-copy">
-          <span className="coach-launcher-badge">Coach</span>
-          <strong>Ask Zenflow</strong>
-        </span>
+      <button type="button" className="zc-launcher" aria-expanded={isOpen} aria-controls="zenflow-coach-panel" onClick={() => setIsOpen((current) => !current)}>
+        <span className="zc-launcher-icon" aria-hidden="true">Z</span><span>Ask Zenflow</span>
       </button>
     </div>
   )
