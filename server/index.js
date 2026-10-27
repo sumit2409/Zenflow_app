@@ -1830,7 +1830,7 @@ function buildFallbackCoachReply({ message, summary, resources }) {
     replyLines.push(`Best next place to open: ${topResourceLabels.join(' and ')}.`)
   }
 
-  replyLines.push('Gemini is temporarily unavailable, so this reply is based directly on your Zenflow data and built-in coaching rules.')
+  replyLines.push('AI coaching is unavailable, so this reply is based directly on your Zenflow data and built-in coaching rules.')
   return replyLines.join('\n\n')
 }
 
@@ -1909,6 +1909,18 @@ async function loadCoachUserData(username) {
 }
 
 async function generateCoachReply({ message, history, summary, resources }) {
+  if (process.env.LOCAL_AI_URL && process.env.LOCAL_AI_COACH_TOKEN) {
+    const response = await fetch(process.env.LOCAL_AI_URL.replace(/\/$/, '') + '/api/coach/infer', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.LOCAL_AI_COACH_TOKEN },
+      body: JSON.stringify({ message, summary: buildCoachSummaryText({ ...summary, username: 'member', fullName: '' }).slice(0, 3200) }),
+      signal: AbortSignal.timeout(120000),
+    })
+    if (!response.ok) throw new Error('Local coach unavailable (' + response.status + ')')
+    const data = await response.json()
+    if (typeof data.reply !== 'string' || !data.reply.trim()) throw new Error('Empty local coach answer')
+    if (/diagnos|anxiety|depress|disorder|medical|emotional regulation|attentional resources/i.test(data.reply)) throw new Error('Unsupported health interpretation; using activity rules')
+    return data.reply
+  }
   const conversationText = history.length
     ? history.map((entry) => `${entry.role === 'assistant' ? 'Coach' : 'User'}: ${entry.content}`).join('\n')
     : 'No previous conversation.'
@@ -4608,7 +4620,7 @@ app.post('/api/coach/chat', authMiddleware, async (req, res) => {
     })
     const resources = selectCoachResources(message, summary)
 
-    if (!GEMINI_API_KEY) {
+    if (!GEMINI_API_KEY && !(process.env.LOCAL_AI_URL && process.env.LOCAL_AI_COACH_TOKEN)) {
       return res.json({
         ok: true,
         reply: buildFallbackCoachReply({ message, summary, resources }),
