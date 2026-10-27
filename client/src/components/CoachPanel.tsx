@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { BlogArticleId } from './BlogPages'
 import { apiUrl } from '../utils/api'
+import './CoachPanel.css'
 
 type CoachResource =
   | { kind: 'dashboard'; id: 'dashboard'; label: string; description: string }
@@ -41,6 +42,34 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const feedRef = useRef<HTMLDivElement>(null)
+  const [consentClearance, setConsentClearance] = useState<number | null>(null)
+
+  useEffect(() => {
+    let banner: Element | null = null
+    const measure = () => {
+      const rect = banner?.getBoundingClientRect()
+      setConsentClearance(rect && rect.height > 0 ? Math.ceil(window.innerHeight - rect.top + 12) : null)
+    }
+    const resize = new ResizeObserver(measure)
+    const locate = () => {
+      const next = document.querySelector('.cookie-consent')
+      if (next !== banner) {
+        resize.disconnect()
+        banner = next
+        if (banner) resize.observe(banner)
+      }
+      measure()
+    }
+    const changes = new MutationObserver(locate)
+    changes.observe(document.body, { childList: true, subtree: true })
+    window.addEventListener('resize', measure)
+    locate()
+    return () => {
+      changes.disconnect()
+      resize.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [])
 
   useEffect(() => {
     if (!feedRef.current) return
@@ -106,7 +135,7 @@ export default function CoachPanel({ displayName, token, onOpenResource }: Props
   }
 
   return (
-    <div className={`coach-shell ${isOpen ? 'is-open' : ''}`}>
+    <div className={`coach-shell ${isOpen ? 'is-open' : ''}`} style={consentClearance === null ? undefined : { bottom: consentClearance, '--coach-clearance': `${consentClearance}px` } as React.CSSProperties}>
       {isOpen && (
         <section id="zenflow-coach-panel" className="coach-panel card" aria-label="Zenflow Coach">
           <header className="coach-head">

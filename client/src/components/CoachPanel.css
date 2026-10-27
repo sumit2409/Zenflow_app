@@ -1,0 +1,6 @@
+/* Keep the coach usable in the space above an open consent banner. */
+.coach-shell[style] .coach-panel {
+  max-height: max(90px, min(72vh, calc(100dvh - var(--coach-clearance) - 100px)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
