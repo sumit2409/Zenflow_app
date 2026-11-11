@@ -4,10 +4,13 @@
 
 - Verified the `https://zenflow.bio/` Search Console property using its existing domain-provider record.
 - URL Inspection confirms the homepage is already indexed. Requested a recrawl; Google confirmed **Indexing requested**.
-- Submitted `https://zenflow.bio/sitemap.xml`. The submission was accepted, but the first status was **Couldn't fetch**. A direct HTTPS request returned 200 with valid XML. Recheck the processing result; submission does not mean Google successfully processed it.
+- Submitted `https://zenflow.bio/sitemap.xml`. Its initial **Couldn't fetch** status resolved to **Success**, with **Sitemap processed successfully** and 12 pages discovered. The deployed sitemap now also contains the three new tool URLs.
 - Added dedicated public pages for `/meditation-timer`, `/daily-planner`, and `/pomodoro-timer`, linked from the homepage and each other.
 - The production build pre-renders nine public pages: the homepage, three tool introductions, blog index, and four articles. The initial HTML includes the same React-authored content shown to visitors, without requiring JavaScript to discover it.
 - Added route-specific titles, descriptions, canonical URLs, WebPage data, crawlable article links, and sitemap entries. Private tool states are noindex. Unknown URLs return 404 rather than a successful homepage response.
+- Pushed implementation commit `479d790` to main and verified the live deployment: all three new URLs return 200, `index,follow`, a unique title, one main heading, and the correct canonical URL.
+- Google accepted indexing requests for `/meditation-timer`, `/daily-planner`, and `/pomodoro-timer`, in addition to the homepage recrawl. Submission is a crawl-queue request, not confirmation that a page is indexed or ranking.
+- Resubmitted the sitemap after the new deployment so Google can discover the added URLs. Google confirmed **Sitemap submitted successfully**.
 
 ## Validate after deployment
 
