@@ -1,5 +1,7 @@
 ﻿import React, { useEffect, useRef, useState } from 'react'
 import Dashboard from './components/Dashboard'
+import { Capacitor } from '@capacitor/core'
+import RevenueLinks from './components/RevenueLinks'
 import PomodoroTimer from './components/PomodoroTimer'
 import MeditationTimer from './components/MeditationTimer'
 import Login from './components/Login'
@@ -511,14 +513,14 @@ export default function App() {
   }, [profileMeta.appearance?.theme])
 
   useEffect(() => {
+    // Native builds need a separate AdMob integration.
+    if (isAndroidApp || Capacitor.isNativePlatform() || !import.meta.env.PROD || import.meta.env.VITE_ADSENSE_ENABLED === 'false') return
     const script = document.getElementById(ADSENSE_SCRIPT_ID)
     const shouldLoadAds = !account && !selected && !showLogin
 
-    if (!shouldLoadAds) {
-      script?.remove()
-      document.querySelectorAll('.google-auto-placed').forEach((node) => node.remove())
-      return
-    }
+    // Removing the tag does not unload Google's runtime. Load once per document;
+    // manage Auto ads placements and page exclusions in the AdSense account.
+    if (!shouldLoadAds) return
 
     if (script) return
 
@@ -527,6 +529,10 @@ export default function App() {
     nextScript.async = true
     nextScript.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`
     nextScript.crossOrigin = 'anonymous'
+    nextScript.onerror = () => {
+      nextScript.remove()
+      console.warn('Zenflow: AdSense could not load. Check network access, content blockers, and AdSense account status.')
+    }
     document.head.appendChild(nextScript)
   }, [account, selected, showLogin])
 
@@ -899,6 +905,7 @@ export default function App() {
             </div>
             {renderPublicPage(activePublicPage)}
             <footer className="site-footer legal-footer">
+              <RevenueLinks />
               <span>Zenflow</span>
               <div className="footer-links-group" aria-label="Public links">
                 <button type="button" className="ghost-btn" onClick={openBlogIndex}>Blog</button>
@@ -967,6 +974,7 @@ export default function App() {
               </>
             )}
             <footer className="site-footer legal-footer fade-rise">
+              <RevenueLinks />
               <span>Zenflow</span>
               <div className="footer-links-group" aria-label="Public links">
                 <button type="button" className="ghost-btn" onClick={openBlogIndex}>Blog</button>

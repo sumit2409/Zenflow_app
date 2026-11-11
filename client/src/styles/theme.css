@@ -6662,3 +6662,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media (max-width: 600px) { .zf-demo-tabs { grid-template-columns:1fr; }.zf-visual-tab { min-height:74px; } }
 @media (max-width: 420px) { .zf-hero h1 { font-size:3rem; }.zf-preview-body { padding:22px; }.zf-demo-canvas { padding:30px 24px; min-height:300px; }.cookie-consent { left:10px; right:10px; padding:16px; }.zf-preview-foot { flex-direction:column; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
+
+.revenue-links { display:flex; flex-wrap:wrap; gap:12px; align-items:center; font-size:.85rem; }
+.revenue-links a { color:var(--zf-muted); text-underline-offset:3px; }
+.revenue-links span { display:grid; gap:4px; }
+.revenue-links small { color:var(--zf-muted); max-width:320px; line-height:1.5; }

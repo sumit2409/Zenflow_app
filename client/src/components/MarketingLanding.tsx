@@ -1,102 +1,41 @@
-import React, { useState } from 'react'
+﻿import React, { useState } from 'react'
 import type { GoalIntent } from '../types/experience'
+import '../styles/landing.css'
 
-type LandingToolView = 'pomodoro' | 'meditation' | 'sudoku' | 'arcade' | 'breakroom' | 'cv' | 'planner'
-
-type Props = {
-  onOpenAuth: (mode: 'login' | 'register', goal?: GoalIntent) => void
-  onOpenTool: (view: LandingToolView) => void
-}
-
-const demos = {
-  today: { label: 'Today', tabDetail: 'Set your direction', kicker: 'Your day, made clear', title: 'Choose three priorities', detail: 'A short list keeps the next useful action visible.', action: 'Open planner' },
-  focus: { label: 'Focus', tabDetail: 'Protect your attention', kicker: 'Protected attention', title: '25:00', detail: 'Work on one selected task, then pause intentionally.', action: 'Try focus' },
-  reset: { label: 'Reset', tabDetail: 'Come back refreshed', kicker: 'A better kind of break', title: 'What do you need?', detail: 'Choose calm, movement, energy, or a short mental reset.', action: 'Explore reset' },
-} as const
-
+type Tool = 'pomodoro' | 'meditation' | 'sudoku' | 'arcade' | 'breakroom' | 'cv' | 'planner'
+type Props = { onOpenAuth: (mode: 'login' | 'register', goal?: GoalIntent) => void; onOpenTool: (view: Tool) => void }
+const tools: { view: Tool; name: string; detail: string }[] = [
+  { view: 'planner', name: 'Make a little plan', detail: 'Tasks, notes, and a place to start.' },
+  { view: 'pomodoro', name: 'Find your focus', detail: 'One task. A timer. A proper break.' },
+  { view: 'meditation', name: 'Take a breath', detail: 'A few quiet minutes, whenever you need them.' },
+  { view: 'breakroom', name: 'Step away for a bit', detail: 'Small breaks for a tired mind.' },
+]
 export default function MarketingLanding({ onOpenAuth, onOpenTool }: Props) {
-  const [demo, setDemo] = useState<keyof typeof demos>('today')
-  const active = demos[demo]
-
-  const openDemo = () => {
-    if (demo === 'focus') onOpenTool('pomodoro')
-    else if (demo === 'reset') onOpenTool('breakroom')
-    else onOpenTool('planner')
-  }
-
-  return (
-    <div className="landing-shell zen-landing">
-      <a className="marketing-skip-link" href="#main-content">Skip to main content</a>
-      <section id="start" className="zf-hero fade-rise">
-        <div className="zf-hero-copy">
-          <div className="eyebrow">Your personal rhythm workspace</div>
-          <h1>Make space for what matters.</h1>
-          <p className="lead">Plan your day, protect your attention, and reset before overwhelm takes over—all in one calm workspace.</p>
-          <div className="hero-actions">
-            <button className="primary-cta" onClick={() => onOpenAuth('register', 'focus')}>Start free</button>
-            <button className="ghost-btn" onClick={() => onOpenTool('pomodoro')}>Try a focus session</button>
-          </div>
-          <p className="zf-reassurance">No credit card. Core tools work without an account.</p>
+  const [done, setDone] = useState([false, false, false])
+  return <div className="natural-landing" id="main-content">
+    <a className="marketing-skip-link" href="#everyday-tools">Skip to tools</a>
+    <section className="nl-hero" id="start" aria-labelledby="nl-title">
+      <div className="nl-intro">
+        <p className="nl-overline"><span /> A little room to think</p>
+        <h1 id="nl-title">A slower start.<br />A <em>clearer</em> day.</h1>
+        <p className="nl-description">Some days, you just need to write things down and begin. A simple plan, a little focus, a moment to yourself. That’s Zenflow.</p>
+        <div className="nl-actions"><button className="nl-button" onClick={() => onOpenTool('pomodoro')}>Find a little focus <span aria-hidden="true">↗</span></button><a href="#everyday-tools" className="nl-text-link">Look around <span aria-hidden="true">↓</span></a></div>
+        <p className="nl-note">Free to try. No account needed for a focus session.</p>
+      </div>
+      <div className="nl-desk">
+        <span className="nl-desk-caption">A small beginning, for today.</span>
+        <div className="nl-notebook">
+          <div className="nl-notebook-top"><span>THE DAILY PAGE</span><span>01 / A fresh start</span></div>
+          <h2>One thing at a time.</h2><p className="nl-handwritten">You don’t have to do it all.</p>
+          <div className="nl-checklist" aria-label="Try a sample daily checklist">{['Write down what’s on your mind', 'Pick one thing to work on', 'Leave a little space for a break'].map((task, i) => <label key={task} className={done[i] ? 'is-done' : ''}><input type="checkbox" checked={done[i]} onChange={() => setDone(previous => previous.map((value, index) => index === i ? !value : value))} /><span>{task}</span></label>)}</div>
+          <div className="nl-notebook-bottom"><span>Less on your list.<br />More room in your day.</span><svg aria-hidden="true" viewBox="0 0 90 64"><path d="M8 52C28 48 32 25 48 12M27 43C12 24 18 13 26 15C36 18 34 34 27 43ZM38 29C39 9 55 2 61 8C63 17 49 26 38 29ZM31 38C54 30 70 36 68 44C63 53 44 45 31 38ZM49 13C64 7 76 10 78 17" /></svg></div>
         </div>
-        <div className="zf-dashboard-preview" aria-label="Preview of the Zenflow Today workspace">
-          <div className="zf-preview-head"><span className="brand-dot" /> <strong>Today</strong><span>{new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span></div>
-          <div className="zf-preview-body">
-            <p className="section-kicker">What matters today?</p>
-            <h2>Finish the work that needs a clear mind.</h2>
-            <div className="zf-priority"><span>1</span><p>Choose your first priority</p><em>Start here</em></div>
-            <div className="zf-priority"><span>2</span><p>Protect one focused block</p></div>
-            <button className="zf-focus-button" onClick={() => onOpenTool('pomodoro')}><span>Start focus</span><strong>25 min</strong></button>
-            <div className="zf-preview-foot"><span>0 min focused today</span><span>A little progress still counts.</span></div>
-          </div>
-        </div>
-      </section>
-
-      <main id="main-content">
-        <section id="how-it-works" className="zf-section zf-loop">
-          <div className="zf-section-heading"><span className="section-kicker">A simple daily loop</span><h2>Plan what matters. Focus deeply. Reset intentionally.</h2></div>
-          <div className="zf-loop-grid">
-            <article><span>01</span><h3>Plan</h3><p>Choose today’s priorities and make the next step easy to see.</p></article>
-            <article><span>02</span><h3>Focus</h3><p>Work in a protected session with one task and fewer decisions.</p></article>
-            <article><span>03</span><h3>Reset</h3><p>Recover with a short activity, then return when you’re ready.</p></article>
-          </div>
-        </section>
-
-        <section id="product" className="zf-section zf-demo-section">
-          <div className="zf-demo-copy"><span className="section-kicker">See the flow</span><h2>One workspace for the shape of your day.</h2><p>Each space is designed around one meaningful outcome—not a directory of tools.</p></div>
-          <div className="zf-demo">
-            <div className="zf-demo-tabs" role="tablist" aria-label="Product preview">
-              {(Object.keys(demos) as Array<keyof typeof demos>).map((key) => (
-                <button
-                  key={key}
-                  id={`zf-tab-${key}`}
-                  type="button"
-                  role="tab"
-                  aria-selected={demo === key}
-                  aria-controls="zf-demo-panel"
-                  tabIndex={demo === key ? 0 : -1}
-                  className={`zf-visual-tab ${key} ${demo === key ? 'active' : ''}`}
-                  onClick={() => setDemo(key)}
-                >
-                  <span>{demos[key].label}</span>
-                  <small>{demos[key].tabDetail}</small>
-                </button>
-              ))}
-            </div>
-            <div id="zf-demo-panel" className={`zf-demo-canvas ${demo}`} role="tabpanel" aria-labelledby={`zf-tab-${demo}`}>
-              <span className="section-kicker">{active.kicker}</span><h3>{active.title}</h3><p>{active.detail}</p><button className="ghost-btn" onClick={openDemo}>{active.action} →</button>
-            </div>
-          </div>
-        </section>
-
-        <section className="zf-section zf-benefits"><div className="zf-section-heading"><span className="section-kicker">Made for real days</span><h2>Less friction. More useful attention.</h2></div><ul><li>Start difficult tasks with less friction</li><li>Keep important priorities visible</li><li>Replace distracting breaks with restorative ones</li><li>Build consistency without guilt</li><li>Understand focus patterns over time</li></ul></section>
-
-        <section className="zf-section zf-access">
-          <div><span className="section-kicker">Free access</span><h2>Start before you sign up.</h2><p>Focus sessions, meditation, breathing, Sudoku, memory, reaction games, and break suggestions can be tried as a guest.</p></div>
-          <div className="zf-access-grid"><article><h3>On this device</h3><p>Guest preferences and unfinished session state stay in your browser. Personal content is never placed in cookies.</p></article><article><h3>With an account</h3><p>Sync tasks, daily notes, preferences, session history, and progress across your devices.</p></article></div>
-        </section>
-
-        <section className="zf-final-cta"><span className="section-kicker">Begin gently</span><h2>Your next clear hour starts here.</h2><button className="primary-cta" onClick={() => onOpenAuth('register', 'focus')}>Start free</button></section>
-      </main>
-    </div>
-  )
+        <div className="nl-timer"><div className="nl-timer-label"><span className="nl-live-dot" /> A moment of focus <span aria-hidden="true">↗</span></div><div className="nl-timer-face">25:00<span>Take it one minute at a time.</span></div><p className="nl-timer-caption">25 minutes of focus · 5 minutes off</p><button className="nl-timer-start" onClick={() => onOpenTool('pomodoro')}>Open focus timer <span aria-hidden="true">→</span></button></div>
+        <span className="nl-margin-note">a bit of calm,<br />in the middle of it all.</span>
+      </div>
+    </section>
+    <section className="nl-tools" id="everyday-tools" aria-labelledby="nl-tools-title"><div className="nl-section-intro"><p className="nl-overline">For the everyday</p><h2 id="nl-tools-title">What would help<br /><em>right now?</em></h2><p>No perfect routine required.<br />Just choose somewhere to begin.</p></div><div className="nl-tool-list">{tools.map((tool, i) => <button key={tool.view} onClick={() => onOpenTool(tool.view)}><span className="nl-tool-number">0{i + 1}</span><span><strong>{tool.name}</strong><small>{tool.detail}</small></span><span className="nl-tool-arrow" aria-hidden="true">↗</span></button>)}</div></section>
+    <section className="nl-interlude" id="how-it-works"><span className="nl-asterisk" aria-hidden="true">✳</span><div><p>Not every day needs to be your most productive.</p><h2>Some days, a little<br />progress is <em>plenty.</em></h2></div><p className="nl-interlude-note">Make a plan you can change.<br />Take the break you need.<br />Come back when you’re ready.</p></section>
+    <section className="nl-account" id="product"><div><p className="nl-overline">Keep a place for yourself</p><h2>Your day, picked up<br />where you left it.</h2><p>Create a free account to keep your tasks, notes, and progress together across devices.</p></div><button className="nl-button" onClick={() => onOpenAuth('register', 'focus')}>Make yourself at home <span aria-hidden="true">↗</span></button></section>
+  </div>
 }

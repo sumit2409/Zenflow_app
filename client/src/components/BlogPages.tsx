@@ -597,10 +597,10 @@ export function BlogPreviewSection({
   return (
     <section id="blog-preview" className="blog-preview-shell fade-rise">
       <div className="section-heading-block">
-        <div className="section-kicker">Blog</div>
-        <h2>Read the long-form guides before you ever sign in.</h2>
+        <div className="section-kicker">A little reading</div>
+        <h2>Notes for a less distracted day.</h2>
         <p className="lead">
-          These articles are now based on your actual blog drafts. They stay public, fit the Zenflow look, and casually point readers toward the tools only where it feels useful.
+          On putting your phone down, finding your focus, and making time for the things you want to do.
         </p>
       </div>
       <div className="blog-preview-grid">
@@ -630,7 +630,7 @@ export function BlogIndexPage({
         <div className="section-kicker">Zenflow Blog</div>
         <h2>Practical articles for people trying to think more clearly and drift less.</h2>
         <p>
-          The blog now uses your full article drafts. Readers can work through the ideas first, then use Zenflow later if they want a cleaner timer, note, planner, and progress loop around the habit.
+          Practical ideas for spending less time distracted and more time doing what you set out to do. Read at your own pace.
         </p>
         <div className="blog-index-actions">
           <button type="button" className="primary-cta" onClick={() => onOpenAuth('register', 'focus')}>
