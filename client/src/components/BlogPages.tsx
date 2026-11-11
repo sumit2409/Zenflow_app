@@ -579,9 +579,9 @@ function BlogCard({
             <span key={tag}>{tag}</span>
           ))}
         </div>
-        <button type="button" className="primary-cta" onClick={() => onOpenArticle(article.slug)}>
+        <a className="primary-cta" href={`/${article.slug}`} onClick={event => { event.preventDefault(); onOpenArticle(article.slug) }}>
           Read article
-        </button>
+        </a>
       </div>
     </article>
   )
@@ -609,9 +609,9 @@ export function BlogPreviewSection({
         ))}
       </div>
       <div className="blog-preview-actions">
-        <button type="button" className="primary-cta" onClick={onOpenIndex}>
+        <a className="primary-cta" href="/blog" onClick={event => { event.preventDefault(); onOpenIndex() }}>
           Browse all articles
-        </button>
+        </a>
       </div>
     </section>
   )
@@ -628,7 +628,7 @@ export function BlogIndexPage({
     <section className="blog-shell">
       <article className="blog-hero-card legal-card">
         <div className="section-kicker">Zenflow Blog</div>
-        <h2>Practical articles for people trying to think more clearly and drift less.</h2>
+        <h1>Practical articles for a less distracted day.</h1>
         <p>
           Practical ideas for spending less time distracted and more time doing what you set out to do. Read at your own pace.
         </p>
@@ -669,7 +669,7 @@ export function BlogArticlePage({
       <article className="blog-article-hero legal-card">
         <div className="blog-article-copy">
           <div className="section-kicker">{article.kicker}</div>
-          <h2>{article.title}</h2>
+          <h1>{article.title}</h1>
           <p className="blog-article-description">{article.description}</p>
           <div className="blog-hero-meta">
             <span>{article.category}</span>

@@ -142,11 +142,12 @@ function startKeepAliveScheduler() {
 }
 
 const DEFAULT_PUBLIC_META = {
-  title: 'Zenflow | Focus, Tasks, and Daily Rhythm',
-  description: 'Zenflow combines focus timers, planner tools, daily notes, calm breaks, and public focus articles in one clean flow.',
+  title: 'Zenflow | Meditation Timer, Daily Planner & Focus Tools',
+  description: 'A free online meditation timer, daily planner, and Pomodoro focus timer. Plan your day, work on one task, and make time for a quiet break with Zenflow.',
 }
 
 const PUBLIC_PAGE_META = {
+  ...Object.fromEntries(Object.entries(require('../client/src/content/search-pages.json')).map(([slug, page]) => [`/${slug}`, { title: `${page.title} — Zenflow`, description: page.description }])),
   '/': DEFAULT_PUBLIC_META,
   '/blog': {
     title: 'Blog — Zenflow',
@@ -274,7 +275,8 @@ function injectIndexMeta(html, { title, description, canonicalUrl, robots }) {
 
 function getIndexHtml(buildDir) {
   if (!cachedIndexHtml) {
-    cachedIndexHtml = fs.readFileSync(path.join(buildDir, 'index.html'), 'utf8')
+    const shellPath = path.join(buildDir, 'shell.html')
+    cachedIndexHtml = fs.readFileSync(fs.existsSync(shellPath) ? shellPath : path.join(buildDir, 'index.html'), 'utf8')
   }
   return cachedIndexHtml
 }
@@ -4852,7 +4854,13 @@ if (process.env.NODE_ENV === 'production') {
     return res.redirect(308, redirectUrl)
   })
 
-  app.use(express.static(buildDir))
+  app.use((req, res, next) => {
+    if (req.path === '/shell.html' || req.path.startsWith('/prerender/')) {
+      return res.status(404).set('X-Robots-Tag', 'noindex').type('text').send('Not found')
+    }
+    next()
+  })
+  app.use(express.static(buildDir, { index: false }))
   app.get('*', (req, res) => {
     const publicPage = getPublicPageSeo(req.path)
     const meta = publicPage || {
@@ -4861,8 +4869,10 @@ if (process.env.NODE_ENV === 'production') {
       description: DEFAULT_PUBLIC_META.description,
     }
     const canonicalUrl = new URL(publicPage ? publicPage.path : '/', CANONICAL_ORIGIN).toString()
-    const robots = publicPage ? 'index,follow' : 'noindex,nofollow'
-    const html = injectIndexMeta(getIndexHtml(buildDir), {
+    const robots = publicPage && !req.query.tool ? 'index,follow' : 'noindex,follow'
+    const prerenderPath = publicPage ? path.join(buildDir, publicPage.path === '/' ? 'index.html' : `prerender/${publicPage.path.slice(1)}.html`) : null
+    const template = prerenderPath && fs.existsSync(prerenderPath) ? fs.readFileSync(prerenderPath, 'utf8') : getIndexHtml(buildDir)
+    const html = injectIndexMeta(template, {
       title: meta.title,
       description: meta.description,
       canonicalUrl,
@@ -4870,6 +4880,7 @@ if (process.env.NODE_ENV === 'production') {
     })
 
     res.set('X-Robots-Tag', robots)
+    if (!publicPage && !/^\/app(?:\/|$)/.test(req.path)) res.status(404)
     res.send(html)
   })
 }

@@ -5,7 +5,7 @@
   "description": "Separate Zenflow app frontend",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/prerender-public.mjs",
     "preview": "vite preview",
     "build:android": "npm run build && npx cap sync android",
     "sync:android": "npx cap sync android",

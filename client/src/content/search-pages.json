@@ -1,0 +1,59 @@
+{
+  "meditation-timer": {
+    "title": "Free Online Meditation Timer",
+    "description": "Use Zenflow's free online meditation timer with ambient sounds, breathing patterns, and flexible session lengths. Start a quiet session without an account.",
+    "tool": "meditation",
+    "eyebrow": "A few minutes to yourself",
+    "intro": "A quiet timer for your own meditation practice. Choose a session length, settle in, and let the timer keep track of the time. You can begin without creating an account.",
+    "action": "Open meditation timer",
+    "features": ["Five, ten, twenty, and thirty-minute presets, plus a custom duration", "Optional waves, rain, stream, fan, and white-noise backgrounds", "Optional breathing patterns and a session-end bell"],
+    "sections": [
+      { "heading": "How to use the meditation timer", "body": "Open the timer and choose how long you want to sit. Ten minutes is the default, but a shorter session is fine. Find a position you can stay in comfortably. Leave the breathing pattern off for an unguided session, or select a pattern if you prefer a little structure. Choose an ambient sound if you want one, adjust the volume, and start. Keep the browser tab open; device sleep and background-tab restrictions can affect browser timers and audio." },
+      { "heading": "A simple place to begin", "body": "You do not need to empty your mind or make the session perfect. Notice your natural breathing, or the sounds around you. When you notice your attention has wandered, return to the thing you chose to notice. If focusing on breathing is uncomfortable, choose an external sound or stop the session. This is an unguided timer, not a course or a medical treatment." },
+      { "heading": "Make room for a regular practice", "body": "Try putting a short session next to something you already do: after making tea, before opening your inbox, or after a work block. Choose a length you can actually make time for. The daily planner can help you set aside a small slot, while the focus timer can mark the end of a work session before you take a quiet break." }
+    ],
+    "faqs": [
+      { "question": "Is the meditation timer free?", "answer": "Yes. You can open the meditation timer and run a session without signing in." },
+      { "question": "Is this a guided meditation?", "answer": "No. It is an unguided timer with optional background sounds and breathing patterns. There is no spoken meditation instructor." },
+      { "question": "Can I use it on my phone?", "answer": "Yes, in a modern mobile browser. Keep the page open and your device awake for the most reliable timing and sound." }
+    ]
+  },
+  "daily-planner": {
+    "title": "Online Daily Planner for Tasks and Notes",
+    "description": "Plan your day with Zenflow's online daily planner. Organize tasks, daily notes, and routines, with day, week, month, and year views. Create a free account to save your plan.",
+    "tool": "planner",
+    "eyebrow": "A plan with room to change",
+    "intro": "Put your tasks and notes in one place, decide what needs your attention, and leave room for the rest of your day. Create a free account to save your planner across devices.",
+    "action": "Open daily planner",
+    "features": ["Day, week, month, and year views for different levels of detail", "Daily tasks, notes, and recurring routines", "An account to keep your plan and progress across devices"],
+    "sections": [
+      { "heading": "How to plan a day you can actually follow", "body": "Start by writing down the things you are trying to remember. Separate tasks that have a real deadline from things you would simply like to do. Pick one priority to start with, then add the appointments and routines that already take up time. Leave some space between them. An online daily planner is most useful when it reflects the day you have, rather than the day you wish you had." },
+      { "heading": "Give each task a clear next step", "body": "A task like ‘work on project’ can be hard to start. Try ‘write the first paragraph’ or ‘review the three open comments’ instead. Keep notes alongside your daily plan so useful details do not get lost in a separate list. If something repeats, use a recurring routine. When your day changes, move the task or reduce its scope instead of treating the original plan as a rule." },
+      { "heading": "Connect planning with focus and breaks", "body": "Once you have picked a task, open a focus session and give it one block of attention. Check your plan again after the block: is the next step still the right one? Take a break before adding more. At the end of the day, mark what is finished and decide what needs a new date. The goal is a useful record and a clear next step, not a completely filled calendar." }
+    ],
+    "faqs": [
+      { "question": "Do I need an account for the daily planner?", "answer": "Create a free account to save and synchronize your tasks, notes, and planner data. The meditation and focus timers can be tried without an account." },
+      { "question": "Can I switch between daily and weekly planning?", "answer": "Yes. The planner includes day, week, month, and year views." },
+      { "question": "Does Zenflow have recurring routines?", "answer": "Yes. The planner supports repeated items so you can keep regular routines alongside one-off tasks." }
+    ]
+  },
+  "pomodoro-timer": {
+    "title": "Free Online Pomodoro Focus Timer",
+    "description": "Start a 25-minute focus session with Zenflow's free online Pomodoro timer. Alternate focused work and breaks, with longer work-session presets when you need them.",
+    "tool": "pomodoro",
+    "eyebrow": "One task at a time",
+    "intro": "Choose a task, give it a block of attention, then take a break. Zenflow's online focus timer starts with a 25-minute work session and can be tried without an account.",
+    "action": "Open Pomodoro timer",
+    "features": ["25, 50, and 90-minute work-session presets", "Work and break cycles in one timer", "Task-linked sessions so each block has a clear purpose"],
+    "sections": [
+      { "heading": "How to use a Pomodoro timer", "body": "Pick one specific task before starting the clock. Put aside the tabs and notifications you do not need, choose a work-session length, and start the cycle. Work on the task until the session ends, then take the scheduled break. If something unrelated occurs to you, write it down and return to the task. After the break, decide whether to continue or choose a different next step." },
+      { "heading": "Choose a session length that fits the work", "body": "A 25-minute session is a useful starting point for a task you have been avoiding or a piece of work with a clear first step. A longer block may suit a task that takes more time to get into. Zenflow also offers 50 and 90-minute presets. There is no need to start with the longest option. Change the length when it helps the work, and pause when you need to." },
+      { "heading": "Let the break be a break", "body": "Step away from the task for a few minutes. Get some water, stretch, or look away from the screen. If you want a quiet pause, try the meditation timer. If your next step is unclear, use the daily planner to break the task into something smaller. The timer provides structure; you decide what deserves the next block of your attention." }
+    ],
+    "faqs": [
+      { "question": "Can I use the focus timer without an account?", "answer": "Yes. You can try a focus session as a guest. Create an account if you want your saved work and progress available across devices." },
+      { "question": "Does every session have to be 25 minutes?", "answer": "No. The timer also has 50 and 90-minute work presets. Choose a length that fits your task." },
+      { "question": "Will the timer run reliably in a background tab?", "answer": "Browsers can limit background activity, especially on phones. Keep the page open and the device awake when timing and audio cues matter." }
+    ]
+  }
+}

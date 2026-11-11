@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from 'react'
 import Dashboard from './components/Dashboard'
+import SearchToolPage, { isSearchPageId, searchPages, type SearchPageId } from './components/SearchToolPage'
 import { Capacitor } from '@capacitor/core'
 import RevenueLinks from './components/RevenueLinks'
 import PomodoroTimer from './components/PomodoroTimer'
@@ -88,6 +89,7 @@ function formatDateLabel(value: number | string | null | undefined) {
 }
 
 type PublicPageRoute =
+  | { kind: 'searchTool'; id: SearchPageId }
   | { kind: 'static'; id: StaticPageId }
   | { kind: 'blogIndex' }
   | { kind: 'blogArticle'; id: BlogArticleId }
@@ -115,6 +117,7 @@ function resolvePublicPage(pathname: string, hash: string): PublicPageRoute | nu
   }
 
   const slug = candidatePath.replace(/^\//, '')
+  if (isSearchPageId(slug)) return { kind: 'searchTool', id: slug }
   if (STATIC_PAGES.includes(slug as StaticPageId)) {
     return { kind: 'static', id: slug as StaticPageId }
   }
@@ -133,6 +136,7 @@ function getPublicPagePath(page: PublicPageRoute) {
 }
 
 function getPublicPageMeta(page: PublicPageRoute) {
+  if (page.kind === 'searchTool') return searchPages[page.id]
   if (page.kind === 'blogIndex') return blogPageMeta.blog
   if (page.kind === 'blogArticle') return blogPageMeta[page.id]
   return staticPageMeta[page.id]
@@ -170,6 +174,9 @@ function applyDocumentMeta(title: string, description: string, path: string) {
 
 function resolveTrackedPage(selected: string | null, activePublicPage: PublicPageRoute | null, hasAccount: boolean) {
   if (activePublicPage) {
+    if (activePublicPage.kind === 'searchTool') {
+      return { key: `public:${activePublicPage.id}`, name: searchPages[activePublicPage.id].title, path: `/${activePublicPage.id}`, section: 'public' as const, kind: 'static' as const, authenticated: hasAccount }
+    }
     if (activePublicPage.kind === 'blogIndex') {
       return {
         key: 'public:blog',
@@ -250,7 +257,10 @@ function resolveTrackedPage(selected: string | null, activePublicPage: PublicPag
 
 export default function App() {
   const initialSession = readStoredSession()
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(() => {
+    const tool = new URLSearchParams(window.location.search).get('tool')
+    return ['meditation', 'pomodoro', 'planner'].includes(tool || '') ? tool : null
+  })
   const [lastToolView, setLastToolView] = useState<'pomodoro' | 'meditation' | 'sudoku' | 'arcade' | 'breakroom'>('pomodoro')
   const [lastSessionMinutes, setLastSessionMinutes] = useState(25)
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
@@ -604,6 +614,7 @@ export default function App() {
   }
 
   useEffect(() => {
+    setMetaValue('meta[name="robots"]', 'content', activePublicPage || (!selected && !account) ? 'index,follow' : 'noindex,follow')
     if (activePublicPage) {
       const meta = getPublicPageMeta(activePublicPage)
       applyDocumentMeta(`${meta.title} — Zenflow`, meta.description, getPublicPagePath(activePublicPage))
@@ -614,8 +625,8 @@ export default function App() {
       applyDocumentMeta('Dashboard — Zenflow', 'Zenflow dashboard with your account, planner, and progress in one place.', '/app/dashboard')
     } else {
       applyDocumentMeta(
-        'Zenflow | Plan, focus, and reset',
-        'Plan what matters, focus deeply, and reset intentionally in one calm workspace.',
+        'Zenflow | Meditation Timer, Daily Planner & Focus Tools',
+        'A free online meditation timer, daily planner, and Pomodoro focus timer. Plan your day, work on one task, and make time for a quiet break with Zenflow.',
         '/',
       )
     }
@@ -737,6 +748,9 @@ export default function App() {
   }
 
   function renderPublicPage(page: PublicPageRoute) {
+    if (page.kind === 'searchTool') {
+      return <SearchToolPage id={page.id} onOpenTool={setView} />
+    }
     if (page.kind === 'blogIndex') {
       return <BlogIndexPage onOpenArticle={openBlogArticle} onOpenAuth={openAuth} />
     }

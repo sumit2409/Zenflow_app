@@ -1,0 +1,15 @@
+.search-tool-page { max-width:780px; margin:25px auto 70px; color:var(--zf-charcoal); font-weight:400; }
+.search-tool-page h1 { font:500 clamp(40px,6vw,66px)/1.08 'Cormorant Garamond',Georgia,serif; letter-spacing:-.035em; margin:16px 0 24px; }
+.search-tool-page .search-intro { font-size:17px; line-height:1.85; color:var(--zf-muted); }
+.search-tool-action { display:inline-flex; align-items:center; gap:24px; text-decoration:none; padding:14px 22px; margin:10px 0 30px; }
+.search-features { padding:24px 24px 24px 42px; background:var(--zf-stone); border-radius:5px; line-height:2; }
+.search-tool-page section { margin-top:44px; }
+.search-tool-page h2 { font:500 32px/1.2 'Cormorant Garamond',Georgia,serif; letter-spacing:-.015em; }
+.search-tool-page p { line-height:1.85; }
+.search-tool-page details { border-bottom:1px solid var(--zf-border); padding:18px 0; }
+.search-tool-page summary { cursor:pointer; font-weight:600; line-height:1.6; }
+.search-tool-page nav { display:grid; gap:16px; margin-top:48px; padding-top:24px; border-top:1px solid var(--zf-border); }
+.search-tool-page nav a { color:var(--zf-forest); text-underline-offset:5px; line-height:1.6; }
+.search-static-header,.search-static-footer { max-width:1096px; margin:0 auto; padding:24px; display:flex; gap:24px; flex-wrap:wrap; }
+.search-static-header a,.search-static-footer a { color:var(--zf-forest); }
+.blog-hero-card h1,.blog-article-copy h1 { font:500 clamp(36px,5vw,56px)/1.12 'Cormorant Garamond',Georgia,serif; letter-spacing:-.025em; margin:0; }

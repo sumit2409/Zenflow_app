@@ -50,6 +50,8 @@
 .nl-tool-list small { display:block; margin-top:7px; font-size:11px; font-weight:400; color:var(--nl-muted); line-height:1.6; }
 .nl-tool-arrow { margin-left:auto; font-size:21px; color:#748065; transition:transform .18s; }
 .nl-tool-list button:hover .nl-tool-arrow { transform:translate(3px,-3px); }
+.nl-search-links { display:flex; flex-wrap:wrap; gap:14px 28px; padding:0 0 35px; font-size:12px; }
+.nl-search-links a { color:#495641; text-underline-offset:5px; }
 .nl-interlude { display:flex; gap:45px; align-items:center; padding:55px 42px; background:#eaece2; border-radius:3px; }
 .nl-asterisk { font-size:54px; color:#9f674b; font-weight:400; }
 .nl-interlude>div>p { font-size:10px; color:#65705b; margin:0 0 14px; }

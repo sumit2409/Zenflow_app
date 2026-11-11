@@ -16,6 +16,7 @@ RUN cd server && npm ci --omit=dev && npm cache clean --force
 
 COPY server/ ./server/
 COPY --from=client-build /app/client/dist ./client/dist
+COPY client/src/content/search-pages.json ./client/src/content/search-pages.json
 
 USER node
 EXPOSE 8080
